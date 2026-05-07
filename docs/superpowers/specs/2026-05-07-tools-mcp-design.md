@@ -64,7 +64,10 @@
 --tunnel <type>            # 隧道类型：direct, ssh (默认: direct)
 ```
 
-**SSH 隧道参数（当 --tunnel=ssh 时）：**
+**当 --tunnel=direct 时：**
+无额外参数
+
+**当 --tunnel=ssh 时：**
 ```bash
 --ssh-jump <host>          # 跳板机地址
 --ssh-user <user>          # 跳板机用户名
@@ -167,10 +170,11 @@ password: secret
 database: app_db
 
 # 隧道配置
-tunnel_type: ssh  # direct 或 ssh
-ssh_jump: bastion.com
-ssh_user: jump_admin
-ssh_password: jump_secret
+tunnel:
+  type: ssh
+  ssh_jump: bastion.com
+  ssh_user: jump_admin
+  ssh_password: jump_secret
 ```
 
 ```yaml
@@ -181,23 +185,23 @@ port: 6379
 password: redis_pass
 db: 0
 
-ssh_jump: bastion.com
-ssh_user: jump_admin
-ssh_key_path: ~/.ssh/jump_key
+tunnel:
+  type: ssh
+  ssh_jump: bastion.com
+  ssh_user: jump_admin
+  ssh_key_path: ~/.ssh/jump_key
 ```
 
 ```yaml
-# ssh-config.yaml
+# ssh-config.yaml (direct connection, no tunnel)
 type: ssh
 host: target.internal.com
 port: 22
 user: admin
 key_path: ~/.ssh/id_rsa
 
-# 多级跳板机
-ssh_jump: bastion1.com,bastion2.com
-ssh_user: jump_admin
-ssh_key_path: ~/.ssh/jump_key
+tunnel:
+  type: direct
 ```
 
 **使用方式：**
@@ -226,11 +230,11 @@ user = "dbuser"
 password = "secret"
 database = "app_db"
 
-# 隧道配置
-tunnel_type = "ssh"  # "direct" 或 "ssh"
+[profiles.prod-db.tunnel]
+type = "ssh"
 ssh_jump = "bastion.com"
 ssh_user = "jump_admin"
-ssh_password = "jump_secret"  # 或使用 ssh_key_path
+ssh_password = "jump_secret"
 
 # Redis 配置
 [profiles.cache]
@@ -240,12 +244,13 @@ port = 6379
 password = "redis_pass"
 db = 0
 
-# SSH 跳板机配置
+[profiles.cache.tunnel]
+type = "ssh"
 ssh_jump = "bastion.com"
 ssh_user = "jump_admin"
 ssh_key_path = "~/.ssh/jump_key"
 
-# SSH 服务器配置
+# SSH 服务器配置（直接连接）
 [profiles.prod-server]
 type = "ssh"
 host = "target.internal.com"
@@ -253,17 +258,19 @@ port = 22
 user = "admin"
 key_path = "~/.ssh/id_rsa"
 
-# 多级跳板机
-ssh_jump = "bastion1.com,bastion2.com"
-ssh_user = "jump_admin"
-ssh_key_path = "~/.ssh/jump_key"
+[profiles.prod-server.tunnel]
+type = "direct"
 
-# 直接 SSH 连接（无跳板机）
-[profiles.dev-server]
-type = "ssh"
-host = "dev.example.com"
-user = "developer"
+# 直接 MySQL 连接（无跳板机）
+[profiles.dev-db]
+type = "mysql"
+host = "localhost"
+port = 3306
+user = "root"
 password = "dev_pass"
+
+[profiles.dev-db.tunnel]
+type = "direct"
 ```
 
 ### 配置优先级
