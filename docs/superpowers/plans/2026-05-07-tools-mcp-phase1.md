@@ -220,6 +220,26 @@ impl FromStr for TunnelType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum TunnelConfig {
+    Direct,
+    Ssh {
+        ssh_jump: String,
+        ssh_user: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        ssh_password: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        ssh_key_path: Option<String>,
+        #[serde(default = "default_ssh_port")]
+        ssh_port: u16,
+    },
+}
+
+fn default_ssh_port() -> u16 {
+    22
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Profile {
     #[serde(rename = "type")]
     pub service_type: ServiceType,
@@ -229,12 +249,7 @@ pub struct Profile {
     pub password: Option<String>,
     pub database: Option<String>,
     pub key_path: Option<String>,
-    pub tunnel_type: Option<TunnelType>,
-    pub ssh_jump: Option<String>,
-    pub ssh_user: Option<String>,
-    pub ssh_password: Option<String>,
-    pub ssh_key_path: Option<String>,
-    pub ssh_port: Option<u16>,
+    pub tunnel: Option<TunnelConfig>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -252,12 +267,7 @@ pub struct Config {
     pub password: Option<String>,
     pub database: Option<String>,
     pub key_path: Option<String>,
-    pub tunnel_type: Option<TunnelType>,
-    pub ssh_jump: Option<String>,
-    pub ssh_user: Option<String>,
-    pub ssh_password: Option<String>,
-    pub ssh_key_path: Option<String>,
-    pub ssh_port: Option<u16>,
+    pub tunnel: Option<TunnelConfig>,
 }
 ```
 
@@ -397,12 +407,7 @@ impl<'de> Deserialize<'de> for Config {
             password: Option<String>,
             database: Option<String>,
             key_path: Option<String>,
-            tunnel_type: Option<TunnelType>,
-            ssh_jump: Option<String>,
-            ssh_user: Option<String>,
-            ssh_password: Option<String>,
-            ssh_key_path: Option<String>,
-            ssh_port: Option<u16>,
+            tunnel: Option<TunnelConfig>,
         }
 
         let helper = ConfigHelper::deserialize(deserializer)?;
@@ -414,12 +419,7 @@ impl<'de> Deserialize<'de> for Config {
             password: helper.password,
             database: helper.database,
             key_path: helper.key_path,
-            tunnel_type: helper.tunnel_type,
-            ssh_jump: helper.ssh_jump,
-            ssh_user: helper.ssh_user,
-            ssh_password: helper.ssh_password,
-            ssh_key_path: helper.ssh_key_path,
-            ssh_port: helper.ssh_port,
+            tunnel: helper.tunnel,
         })
     }
 }
@@ -533,12 +533,7 @@ impl ConfigMerger {
             password: override_cfg.password.or(base.password),
             database: override_cfg.database.or(base.database),
             key_path: override_cfg.key_path.or(base.key_path),
-            tunnel_type: override_cfg.tunnel_type.or(base.tunnel_type),
-            ssh_jump: override_cfg.ssh_jump.or(base.ssh_jump),
-            ssh_user: override_cfg.ssh_user.or(base.ssh_user),
-            ssh_password: override_cfg.ssh_password.or(base.ssh_password),
-            ssh_key_path: override_cfg.ssh_key_path.or(base.ssh_key_path),
-            ssh_port: override_cfg.ssh_port.or(base.ssh_port),
+            tunnel: override_cfg.tunnel.or(base.tunnel),
         }
     }
 
@@ -614,33 +609,27 @@ Expected: FAIL with "Cli not defined"
 Add to top of `src/cli/args.rs`:
 
 ```rust
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum TunnelType {
+#[derive(Subcommand, Debug, Clone)]
+pub enum TunnelArgs {
     Direct,
-    Ssh,
-}
+    Ssh {
+        #[arg(long, help = "SSH jump host")]
+        ssh_jump: String,
 
-#[derive(Args, Debug, Clone)]
-pub struct TunnelArgs {
-    #[arg(long, value_enum, default_value = "direct", help = "Tunnel type")]
-    pub tunnel: TunnelType,
+        #[arg(long, help = "SSH jump user")]
+        ssh_user: String,
 
-    #[arg(long, help = "SSH jump host (when --tunnel=ssh)")]
-    pub ssh_jump: Option<String>,
+        #[arg(long, help = "SSH jump password")]
+        ssh_password: Option<String>,
 
-    #[arg(long, help = "SSH jump user (when --tunnel=ssh)")]
-    pub ssh_user: Option<String>,
+        #[arg(long, help = "SSH jump key path")]
+        ssh_key_path: Option<String>,
 
-    #[arg(long, help = "SSH jump password (when --tunnel=ssh)")]
-    pub ssh_password: Option<String>,
-
-    #[arg(long, help = "SSH jump key path (when --tunnel=ssh)")]
-    pub ssh_key_path: Option<String>,
-
-    #[arg(long, help = "SSH jump port (when --tunnel=ssh)", default_value = "22")]
-    pub ssh_port: Option<u16>,
+        #[arg(long, help = "SSH jump port", default_value = "22")]
+        ssh_port: u16,
+    },
 }
 
 #[derive(Parser, Debug)]
@@ -650,8 +639,8 @@ pub struct Cli {
     #[arg(long, global = true, help = "Path to YAML config file")]
     pub config: Option<String>,
 
-    #[command(flatten)]
-    pub tunnel_args: TunnelArgs,
+    #[command(subcommand)]
+    pub tunnel: Option<TunnelArgs>,
 
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -697,7 +686,7 @@ Create: `src/cli/mod.rs`
 mod args;
 mod handler;
 
-pub use args::{Cli, Commands, TunnelArgs, TunnelType};
+pub use args::{Cli, Commands, TunnelArgs};
 pub use handler::CliHandler;
 ```
 
@@ -1315,8 +1304,8 @@ Expected: FAIL with "CliHandler not defined"
 Add to top of `src/cli/handler.rs`:
 
 ```rust
-use crate::cli::{Cli, Commands, TunnelType};
-use crate::config::{Config, ConfigLoader, ConfigMerger, ServiceType};
+use crate::cli::{Cli, Commands, TunnelArgs};
+use crate::config::{Config, ConfigLoader, ConfigMerger, ServiceType, TunnelConfig};
 use crate::connection::MySQLConnection;
 use crate::error::{Error, Result};
 use crate::executor::MySQLExecutor;
@@ -1387,7 +1376,7 @@ impl CliHandler {
         }
 
         // 3. Add CLI arguments
-        let tunnel_type = Self::cli_tunnel_to_config_tunnel(cli.tunnel_args.tunnel);
+        let tunnel_config = cli.tunnel.as_ref().map(Self::cli_tunnel_to_config_tunnel);
         let cli_config = Config {
             service_type: Some(service_type),
             host,
@@ -1396,22 +1385,29 @@ impl CliHandler {
             password,
             database,
             key_path,
-            tunnel_type: Some(tunnel_type),
-            ssh_jump: cli.tunnel_args.ssh_jump.clone(),
-            ssh_user: cli.tunnel_args.ssh_user.clone(),
-            ssh_password: cli.tunnel_args.ssh_password.clone(),
-            ssh_key_path: cli.tunnel_args.ssh_key_path.clone(),
-            ssh_port: cli.tunnel_args.ssh_port,
+            tunnel: tunnel_config,
         };
         configs.push(cli_config);
 
         Ok(ConfigMerger::merge_multiple(configs))
     }
 
-    fn cli_tunnel_to_config_tunnel(cli_tunnel: TunnelType) -> crate::config::TunnelType {
+    fn cli_tunnel_to_config_tunnel(cli_tunnel: &TunnelArgs) -> TunnelConfig {
         match cli_tunnel {
-            TunnelType::Direct => crate::config::TunnelType::Direct,
-            TunnelType::Ssh => crate::config::TunnelType::Ssh,
+            TunnelArgs::Direct => TunnelConfig::Direct,
+            TunnelArgs::Ssh {
+                ssh_jump,
+                ssh_user,
+                ssh_password,
+                ssh_key_path,
+                ssh_port,
+            } => TunnelConfig::Ssh {
+                ssh_jump: ssh_jump.clone(),
+                ssh_user: ssh_user.clone(),
+                ssh_password: ssh_password.clone(),
+                ssh_key_path: ssh_key_path.clone(),
+                ssh_port: *ssh_port,
+            },
         }
     }
 
@@ -1424,12 +1420,7 @@ impl CliHandler {
             password: profile.password.clone(),
             database: profile.database.clone(),
             key_path: profile.key_path.clone(),
-            tunnel_type: profile.tunnel_type.clone(),
-            ssh_jump: profile.ssh_jump.clone(),
-            ssh_user: profile.ssh_user.clone(),
-            ssh_password: profile.ssh_password.clone(),
-            ssh_key_path: profile.ssh_key_path.clone(),
-            ssh_port: profile.ssh_port,
+            tunnel: profile.tunnel.clone(),
         }
     }
 
