@@ -24,12 +24,18 @@
    - 合并配置（按优先级：命令行 > YAML > 环境变量 > TOML profile > 默认值）
 
 2. **Connection 模块** - 连接管理
+   - `Connection` trait - 统一的连接接口
    - `MySQLConnection` - 使用 `mysql_async` crate
    - `RedisConnection` - 使用 `redis` crate
    - `SSHConnection` - 使用 `ssh2` crate
-   - `TunnelManager` - SSH 隧道管理（端口转发）
 
-3. **Executor 模块** - 命令执行
+3. **Tunnel 模块** - 隧道管理
+   - `Tunnel` trait - 统一的隧道接口
+   - `DirectTunnel` - 直接连接（无隧道）
+   - `SSHTunnel` - SSH 跳板机隧道
+   - 未来可扩展：`VPNTunnel`, `ProxyTunnel` 等
+
+4. **Executor 模块** - 命令执行
    - 统一的执行接口
    - 结果标准化
 
@@ -274,14 +280,78 @@ tools-mcp --config=./mysql-config.yaml mysql "SELECT 1" --host=localhost
 
 ## SSH 隧道实现
 
+### Tunnel Trait 设计
+
+所有隧道方式都实现统一的 `Tunnel` trait：
+
+```rust
+#[async_trait]
+pub trait Tunnel: Send + Sync {
+    async fn establish(&mut self) -> Result<TunnelEndpoint>;
+    async fn close(&mut self) -> Result<()>;
+    fn is_active(&self) -> bool;
+}
+
+pub struct TunnelEndpoint {
+    pub host: String,
+    pub port: u16,
+}
+```
+
+### 隧道实现
+
+**DirectTunnel** - 直接连接，无隧道：
+```rust
+pub struct DirectTunnel {
+    target_host: String,
+    target_port: u16,
+}
+
+impl Tunnel for DirectTunnel {
+    async fn establish(&mut self) -> Result<TunnelEndpoint> {
+        // 直接返回目标地址
+        Ok(TunnelEndpoint {
+            host: self.target_host.clone(),
+            port: self.target_port,
+        })
+    }
+}
+```
+
+**SSHTunnel** - SSH 跳板机隧道：
+```rust
+pub struct SSHTunnel {
+    jump_host: String,
+    jump_port: u16,
+    jump_user: String,
+    jump_auth: SSHAuth,
+    target_host: String,
+    target_port: u16,
+    local_port: Option<u16>,
+    ssh_session: Option<Session>,
+}
+
+impl Tunnel for SSHTunnel {
+    async fn establish(&mut self) -> Result<TunnelEndpoint> {
+        // 1. 连接到跳板机
+        // 2. 创建端口转发：localhost:random_port -> target_host:target_port
+        // 3. 返回 localhost:random_port
+        Ok(TunnelEndpoint {
+            host: "localhost".to_string(),
+            port: self.local_port.unwrap(),
+        })
+    }
+}
+```
+
 ### 工作原理
 
-对于 MySQL 和 Redis 连接，当指定了 SSH jump 参数时：
+对于 MySQL 和 Redis 连接：
 
-1. 建立到跳板机的 SSH 连接
-2. 创建本地端口转发：`localhost:random_port -> target_host:target_port`
-3. 通过 `localhost:random_port` 连接 MySQL/Redis
-4. 命令执行完成后关闭隧道
+1. 根据配置选择隧道类型（Direct 或 SSH）
+2. 调用 `tunnel.establish()` 获取连接端点
+3. 使用返回的端点连接 MySQL/Redis
+4. 命令执行完成后调用 `tunnel.close()`
 
 ### 多级跳板机
 
