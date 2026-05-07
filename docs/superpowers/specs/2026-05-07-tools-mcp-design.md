@@ -59,7 +59,12 @@
 --config <path>            # 指定 YAML 配置文件路径
 ```
 
-**SSH Jump 参数：**
+**隧道参数：**
+```bash
+--tunnel <type>            # 隧道类型：direct, ssh (默认: direct)
+```
+
+**SSH 隧道参数（当 --tunnel=ssh 时）：**
 ```bash
 --ssh-jump <host>          # 跳板机地址
 --ssh-user <user>          # 跳板机用户名
@@ -71,7 +76,7 @@
 ### MySQL 命令
 
 ```bash
-# 直接连接
+# 直接连接（默认）
 tools-mcp mysql "SELECT * FROM users" \
   --host=localhost --port=3306 --user=root --password=secret
 
@@ -82,12 +87,12 @@ tools-mcp mysql "SELECT * FROM users" --profile=prod
 tools-mcp --config=./mysql-config.yaml mysql "SELECT * FROM users"
 
 # 通过 SSH 跳板机连接内网数据库
-tools-mcp --ssh-jump=bastion.com --ssh-user=admin --ssh-password=secret \
+tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=secret \
   mysql "SELECT * FROM users" \
   --host=mysql.internal.com --user=dbuser --password=dbpass
 
-# YAML 配置文件 + SSH 跳板机
-tools-mcp --config=./mysql-config.yaml --ssh-jump=bastion.com --ssh-user=admin \
+# YAML 配置文件 + SSH 隧道
+tools-mcp --config=./mysql-config.yaml --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin \
   mysql "SELECT * FROM users"
 ```
 
@@ -161,7 +166,8 @@ user: dbuser
 password: secret
 database: app_db
 
-# 可选的 SSH 跳板机配置
+# 隧道配置
+tunnel_type: ssh  # direct 或 ssh
 ssh_jump: bastion.com
 ssh_user: jump_admin
 ssh_password: jump_secret
@@ -220,7 +226,8 @@ user = "dbuser"
 password = "secret"
 database = "app_db"
 
-# SSH 跳板机配置
+# 隧道配置
+tunnel_type = "ssh"  # "direct" 或 "ssh"
 ssh_jump = "bastion.com"
 ssh_user = "jump_admin"
 ssh_password = "jump_secret"  # 或使用 ssh_key_path
@@ -272,10 +279,10 @@ password = "dev_pass"
 **示例：**
 
 ```bash
-# YAML 文件中 host=mysql.internal.com
-# 命令行参数 --host=localhost
-# 最终使用 localhost（命令行参数优先级更高）
-tools-mcp --config=./mysql-config.yaml mysql "SELECT 1" --host=localhost
+# YAML 文件中 host=mysql.internal.com, tunnel_type=ssh
+# 命令行参数 --host=localhost --tunnel=direct
+# 最终使用 localhost 和 direct 隧道（命令行参数优先级更高）
+tools-mcp --config=./mysql-config.yaml --tunnel=direct mysql "SELECT 1" --host=localhost
 ```
 
 ## SSH 隧道实现
