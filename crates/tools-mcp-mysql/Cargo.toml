@@ -1,0 +1,9 @@
+[package]
+name = "tools-mcp-mysql"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-trait = "0.1"
+mysql_async = "0.34"
+tools-mcp-core = { path = "../tools-mcp-core" }

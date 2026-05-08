@@ -3323,6 +3323,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "tools-mcp-core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+]
+
+[[package]]
+name = "tools-mcp-mysql"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "mysql_async",
+ "tools-mcp-core",
+]
+
+[[package]]
 name = "tracing"
 version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
