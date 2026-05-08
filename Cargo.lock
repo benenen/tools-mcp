@@ -3765,6 +3765,7 @@ dependencies = [
  "tools-mcp-http",
  "tools-mcp-mysql",
  "tools-mcp-redis",
+ "tools-mcp-ssh",
 ]
 
 [[package]]
@@ -3805,6 +3806,16 @@ dependencies = [
  "tokio",
  "tools-mcp-core",
  "urlencoding",
+]
+
+[[package]]
+name = "tools-mcp-ssh"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "russh",
+ "tokio",
+ "tools-mcp-core",
 ]
 
 [[package]]
