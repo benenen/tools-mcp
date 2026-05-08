@@ -1,7 +1,7 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
-// Usage 行里的 `[OPTIONS_GLOBAL]` 是手写占位符（非 clap 内建），覆盖所有
+// Usage 行里的 `[GLOBAL OPTIONS]` 是手写占位符（非 clap 内建），覆盖所有
 // `global = true` 的参数；`[OPTIONS]` 是 clap 内建占位符，表示子命令自己的
 // 参数。下方的 `USAGE_LEGEND`（通过 `after_help`）会把这两个占位符对应
 // 到帮助正文里的 section 名，让 CLI 用户一眼就能看清"哪些放命令前、哪些
@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// 帮助底部的占位符图例，root 和子命令共用。
 const USAGE_LEGEND: &str = "\
 Placeholder legend:
-  [OPTIONS_GLOBAL]  Tool-wide flags. Shown below under \"Global Options\"
+  [GLOBAL OPTIONS]  Tool-wide flags. Shown below under \"Global Options\"
                     (--config) and \"Tunnel\" (--tunnel, --ssh-*) sections.
                     Can be placed before OR after the subcommand.
   [OPTIONS]         Subcommand-specific flags. Shown under the subcommand's
@@ -20,7 +20,7 @@ Placeholder legend:
 #[derive(Parser, Debug)]
 #[command(name = "tools-mcp")]
 #[command(about = "Unified tool for SSH, MySQL, Redis connections with MCP support")]
-#[command(override_usage = "tools-mcp [OPTIONS_GLOBAL] [COMMAND]")]
+#[command(override_usage = "tools-mcp [GLOBAL OPTIONS] [COMMAND]")]
 #[command(after_help = USAGE_LEGEND)]
 pub struct Cli {
     /// Path to YAML config file
@@ -70,7 +70,7 @@ pub enum TunnelKind {
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
     /// Execute a MySQL query
-    #[command(override_usage = "tools-mcp [OPTIONS_GLOBAL] mysql [OPTIONS] <QUERY>")]
+    #[command(override_usage = "tools-mcp [GLOBAL OPTIONS] mysql [OPTIONS] <QUERY>")]
     #[command(after_help = USAGE_LEGEND)]
     Mysql {
         /// SQL query to execute
