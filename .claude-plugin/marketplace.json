@@ -1,6 +1,10 @@
 {
   "name": "tools-mcp-dev",
   "description": "Local development marketplace for the tools-mcp plugin",
+  "owner": {
+    "name": "benenen",
+    "url": "https://github.com/benenen/tools-mcp"
+  },
   "plugins": [
     {
       "name": "tools-mcp",
