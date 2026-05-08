@@ -344,6 +344,171 @@ pub async fn redis_exec(params: RedisExecParams) -> Result<ExecutionResult> {
     crate::core::redis::execute(config, &command).await
 }
 
+/// JSON parameters for the `http_exec` MCP tool.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct HttpExecParams {
+    /// HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS).
+    pub method: String,
+
+    /// Full URL (http:// or https://).
+    pub url: String,
+
+    /// Extra headers as a list of `Name: Value` strings.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub headers: Vec<String>,
+
+    /// Request body (raw string).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>,
+
+    /// Set Content-Type: application/json (does not transform the body).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub json: bool,
+
+    /// `Authorization: Bearer <TOKEN>` shortcut.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bearer: Option<String>,
+
+    /// HTTP Basic auth as `user:password`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub basic: Option<String>,
+
+    /// Accept invalid TLS certificates (self-signed). DANGER.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub insecure: bool,
+
+    /// Tunnel kind. "direct" (default) or "ssh".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tunnel: Option<TunnelKind>,
+
+    /// SSH jump host(s).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_jump: Option<SshJumpInput>,
+
+    /// SSH jump user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_user: Option<String>,
+
+    /// SSH jump password.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_password: Option<String>,
+
+    /// SSH key path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_key_path: Option<String>,
+
+    /// SSH jump port (default 22).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_port: Option<u16>,
+}
+
+fn http_params_to_request_and_tunnel(
+    p: HttpExecParams,
+) -> Result<(tools_mcp_http::HttpRequestSpec, Option<TunnelConfig>)> {
+    let mut header_pairs: Vec<(String, String)> = Vec::new();
+    for raw in &p.headers {
+        let (name, value) = raw.split_once(':').ok_or_else(|| {
+            Error::Config(format!("header '{raw}' must be 'Name: Value' (missing ':')"))
+        })?;
+        header_pairs.push((name.trim().to_string(), value.trim().to_string()));
+    }
+    if p.json {
+        header_pairs.push((
+            "Content-Type".to_string(),
+            "application/json".to_string(),
+        ));
+    }
+
+    let auth = match (p.bearer, p.basic) {
+        (Some(token), None) => tools_mcp_http::HttpAuth::Bearer(token),
+        (None, Some(creds)) => {
+            let (user, password) = creds.split_once(':').ok_or_else(|| {
+                Error::Config("basic must be 'user:password'".to_string())
+            })?;
+            tools_mcp_http::HttpAuth::Basic {
+                user: user.to_string(),
+                password: password.to_string(),
+            }
+        }
+        (None, None) => tools_mcp_http::HttpAuth::None,
+        (Some(_), Some(_)) => {
+            return Err(Error::Config(
+                "bearer and basic are mutually exclusive".to_string(),
+            ));
+        }
+    };
+
+    let req = tools_mcp_http::HttpRequestSpec {
+        method: p.method,
+        url: p.url,
+        headers: header_pairs,
+        body: p.data.map(|s| s.into_bytes()),
+        auth,
+        insecure: p.insecure,
+    };
+
+    let tunnel_config = build_tunnel_config_for_http(
+        p.tunnel,
+        p.ssh_jump,
+        p.ssh_user,
+        p.ssh_password,
+        p.ssh_key_path,
+        p.ssh_port,
+    )?;
+
+    Ok((req, tunnel_config))
+}
+
+fn build_tunnel_config_for_http(
+    kind: Option<TunnelKind>,
+    ssh_jump: Option<SshJumpInput>,
+    ssh_user: Option<String>,
+    ssh_password: Option<String>,
+    ssh_key_path: Option<String>,
+    ssh_port: Option<u16>,
+) -> Result<Option<TunnelConfig>> {
+    let Some(kind) = kind else { return Ok(None); };
+    match kind {
+        TunnelKind::Direct => {
+            let stray = ssh_jump.is_some()
+                || ssh_user.is_some()
+                || ssh_password.is_some()
+                || ssh_key_path.is_some()
+                || ssh_port.is_some();
+            if stray {
+                return Err(Error::Config(
+                    "ssh_* fields are only valid with tunnel = \"ssh\"".to_string(),
+                ));
+            }
+            Ok(Some(TunnelConfig::Direct))
+        }
+        TunnelKind::Ssh => {
+            let jumps = ssh_jump.map(SshJumpInput::into_jumps).ok_or_else(|| {
+                Error::Config("ssh_jump is required when tunnel = \"ssh\"".to_string())
+            })?;
+            if jumps.is_empty() {
+                return Err(Error::Config("ssh_jump must not be empty".to_string()));
+            }
+            let ssh_user = ssh_user.ok_or_else(|| {
+                Error::Config("ssh_user is required when tunnel = \"ssh\"".to_string())
+            })?;
+            Ok(Some(TunnelConfig::Ssh {
+                ssh_jumps: jumps,
+                ssh_user,
+                ssh_password,
+                ssh_key_path,
+                ssh_port: ssh_port.unwrap_or(22),
+            }))
+        }
+    }
+}
+
+/// Public entry point for the http_exec tool.
+pub async fn http_exec(params: HttpExecParams) -> Result<ExecutionResult> {
+    let (req, tunnel_config) = http_params_to_request_and_tunnel(params)?;
+    crate::core::http::execute(req, tunnel_config).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -460,5 +625,36 @@ mod tests {
         assert_eq!(cfg.password.as_deref(), Some("pwd"));
         assert_eq!(cfg.db, Some(2));
         assert_eq!(cfg.service_type, Some(ServiceType::Redis));
+    }
+
+    #[test]
+    fn test_http_params_to_request_basic() {
+        let p = HttpExecParams {
+            method: "POST".into(),
+            url: "https://api.example.com/x".into(),
+            headers: vec!["X-Foo: bar".into()],
+            data: Some(r#"{"a":1}"#.into()),
+            json: true,
+            bearer: Some("tok".into()),
+            basic: None,
+            insecure: false,
+            tunnel: None,
+            ssh_jump: None,
+            ssh_user: None,
+            ssh_password: None,
+            ssh_key_path: None,
+            ssh_port: None,
+        };
+        let (req, tunnel) = http_params_to_request_and_tunnel(p).unwrap();
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.url, "https://api.example.com/x");
+        assert!(req.headers.contains(&("X-Foo".to_string(), "bar".to_string())));
+        assert!(req.headers.contains(&("Content-Type".to_string(), "application/json".to_string())));
+        assert_eq!(req.body.as_deref(), Some(r#"{"a":1}"#.as_bytes()));
+        match req.auth {
+            tools_mcp_http::HttpAuth::Bearer(t) => assert_eq!(t, "tok"),
+            other => panic!("expected Bearer, got {other:?}"),
+        }
+        assert!(tunnel.is_none());
     }
 }

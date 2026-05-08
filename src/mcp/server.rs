@@ -61,6 +61,27 @@ impl ToolsMcpServer {
             ])),
         }
     }
+
+    /// Execute an HTTP request, optionally through an SSH tunnel.
+    #[tool(description = "Send an HTTP/HTTPS request and return status, headers, and body. Optionally route through an SSH jump host. Same options as the `tools-mcp http` CLI subcommand.")]
+    async fn http_exec(
+        &self,
+        Parameters(params): Parameters<crate::mcp::tools::HttpExecParams>,
+    ) -> std::result::Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
+        match crate::mcp::tools::http_exec(params).await {
+            Ok(result) => {
+                let json = serde_json::to_string_pretty(&result).map_err(|e| {
+                    rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
+                })?;
+                Ok(rmcp::model::CallToolResult::success(vec![
+                    rmcp::model::Content::text(json),
+                ]))
+            }
+            Err(e) => Ok(rmcp::model::CallToolResult::error(vec![
+                rmcp::model::Content::text(e.to_string()),
+            ])),
+        }
+    }
 }
 
 #[tool_handler]
