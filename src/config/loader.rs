@@ -6,15 +6,21 @@ pub struct ConfigLoader;
 
 impl ConfigLoader {
     pub fn load_toml_file(path: &Path) -> Result<TomlConfig> {
-        let content = std::fs::read_to_string(path)?;
-        let config: TomlConfig = toml::from_str(&content)?;
-        Ok(config)
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            Error::Config(format!("cannot read TOML file '{}': {}", path.display(), e))
+        })?;
+        toml::from_str(&content).map_err(|e| {
+            Error::Config(format!("invalid TOML in '{}': {}", path.display(), e))
+        })
     }
 
     pub fn load_yaml_file(path: &Path) -> Result<Config> {
-        let content = std::fs::read_to_string(path)?;
-        let config: Config = serde_yaml::from_str(&content)?;
-        Ok(config)
+        let content = std::fs::read_to_string(path).map_err(|e| {
+            Error::Config(format!("cannot read YAML file '{}': {}", path.display(), e))
+        })?;
+        serde_yaml::from_str(&content).map_err(|e| {
+            Error::Config(format!("invalid YAML in '{}': {}", path.display(), e))
+        })
     }
 
     pub fn load_default_toml() -> Result<Option<TomlConfig>> {
@@ -38,6 +44,8 @@ impl ConfigLoader {
 mod tests {
     use super::*;
     use crate::config::ServiceType;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
 
     #[test]
     fn test_load_toml_config() {
@@ -48,7 +56,10 @@ host = "localhost"
 port = 3306
 user = "root"
 "#;
-        let config: TomlConfig = toml::from_str(toml_content).unwrap();
+        let mut tmp = NamedTempFile::new().unwrap();
+        tmp.write_all(toml_content.as_bytes()).unwrap();
+
+        let config = ConfigLoader::load_toml_file(tmp.path()).unwrap();
         let profile = config.profiles.get("test").unwrap();
         assert_eq!(profile.service_type, ServiceType::Mysql);
         assert_eq!(profile.host.as_deref(), Some("localhost"));

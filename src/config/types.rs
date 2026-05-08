@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize, de::Deserializer};
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -22,24 +22,6 @@ impl FromStr for ServiceType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum TunnelType {
-    Direct,
-    Ssh,
-}
-
-impl FromStr for TunnelType {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "direct" => Ok(TunnelType::Direct),
-            "ssh" => Ok(TunnelType::Ssh),
-            _ => Err(format!("Invalid tunnel type: {}", s)),
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -80,8 +62,9 @@ pub struct TomlConfig {
     pub profiles: std::collections::HashMap<String, Profile>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct Config {
+    #[serde(rename = "type")]
     pub service_type: Option<ServiceType>,
     pub host: Option<String>,
     pub port: Option<u16>,
@@ -90,38 +73,6 @@ pub struct Config {
     pub database: Option<String>,
     pub key_path: Option<String>,
     pub tunnel: Option<TunnelConfig>,
-}
-
-impl<'de> Deserialize<'de> for Config {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct ConfigHelper {
-            #[serde(rename = "type")]
-            service_type: Option<ServiceType>,
-            host: Option<String>,
-            port: Option<u16>,
-            user: Option<String>,
-            password: Option<String>,
-            database: Option<String>,
-            key_path: Option<String>,
-            tunnel: Option<TunnelConfig>,
-        }
-
-        let helper = ConfigHelper::deserialize(deserializer)?;
-        Ok(Config {
-            service_type: helper.service_type,
-            host: helper.host,
-            port: helper.port,
-            user: helper.user,
-            password: helper.password,
-            database: helper.database,
-            key_path: helper.key_path,
-            tunnel: helper.tunnel,
-        })
-    }
 }
 
 #[cfg(test)]
