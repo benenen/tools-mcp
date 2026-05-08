@@ -11,22 +11,22 @@ Unified tool for SSH, MySQL, and Redis connections with MCP (Model Context Proto
 
 ## Status
 
-This is the Phase 3 release. Currently implemented:
+This is the Phase 5 release. Currently implemented:
 
-- MySQL CLI mode (`tools-mcp mysql "..."`)
-- Configuration via YAML file (`--config=PATH`) or TOML profile (`--profile=NAME`)
-- Direct connection (`--tunnel=direct` or no `--tunnel` flag)
+- MySQL CLI mode (`tools-mcp mysql "..."`) and `mysql_exec` MCP tool.
+- **Redis CLI mode** (`tools-mcp redis "..."`) and `redis_exec` MCP tool.
+- Configuration via YAML file (`--config=PATH`) or TOML profile (`--profile=NAME`).
+- Direct connection (`--tunnel=direct` or no `--tunnel`).
 - SSH tunnel (`--tunnel=ssh`) with single- or multi-hop jump (`--ssh-jump=h1[,h2,...]`),
-  password or key auth (`--ssh-password` / `--ssh-key-path`).
-  Host keys are accepted with a fingerprint warning (a future phase will add strict checking).
-- **MCP server mode** (run `tools-mcp` with no subcommand): exposes a `mysql_exec`
-  tool to AI clients over stdio. Same connection / tunnel / profile options as the CLI.
+  password or key auth. Host keys accepted with a fingerprint warning.
+- MCP server mode (`tools-mcp` with no subcommand) over stdio.
 
 Not yet implemented:
-- Redis support
 - SSH direct connection (`tools-mcp ssh ...`)
 - SSH key passphrases, per-hop auth overrides, strict known_hosts verification
 - HTTP/SSE MCP transport
+- Redis cluster routing, pub/sub, transactions, scripting (EVAL)
+- Per-Value typed mapping for RESP3 `Map` / `Set` / `Push`
 
 ## Installation
 
@@ -43,9 +43,10 @@ cargo build --release && cp target/release/tools-mcp ~/.local/bin/
 Rust toolchain install.
 
 This repo is a Cargo workspace. The `tools-mcp` binary crate lives at
-the repo root; the two lib crates `tools-mcp-core` (the trait floor)
-and `tools-mcp-mysql` (the MySQL primitives) live under `crates/`.
-`cargo build` / `cargo test` from the root build and test all three.
+the repo root; the lib crates `tools-mcp-core` (the trait floor),
+`tools-mcp-mysql` (MySQL primitives), and `tools-mcp-redis` (Redis
+primitives) live under `crates/`. `cargo build` / `cargo test` from
+the root build and test all of them.
 
 ## Usage
 
@@ -69,6 +70,23 @@ tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=se
 tools-mcp --tunnel=ssh --ssh-jump=bastion1.com,bastion2.com --ssh-user=admin \
   --ssh-key-path=~/.ssh/jump_key \
   mysql --host=mysql.internal --user=root --password=dbpass "SELECT 1"
+```
+
+### Redis
+
+```bash
+# Direct connection
+tools-mcp redis "GET mykey" --host=localhost --port=6379
+
+# With password + db
+tools-mcp redis "HGETALL myhash" --host=localhost --password=secret --db=2
+
+# Through an SSH jump
+tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=secret \
+  redis "INFO replication" --host=redis.internal --password=cache_pwd
+
+# Using a TOML profile
+tools-mcp redis "KEYS *" --profile=prod-cache
 ```
 
 ### MCP Server
@@ -120,12 +138,17 @@ claude --plugin-dir /path/to/tools-mcp
 
 What the plugin provides:
 
-- **MCP tool** `mysql_exec` (auto-registered via `.mcp.json`).
-- **Skills** that guide the assistant when working with this tool:
+- **MCP tools** auto-registered via `.mcp.json`:
+  - `mysql_exec` — run a MySQL query.
+  - `redis_exec` — run a Redis command.
+- **Skills** that guide the assistant:
   - `tools-mcp-using` — parameter shape, three-layer config priority, multi-hop syntax.
-  - `mysql-debugging` — diagnostic queries for common MySQL error codes, locks, slow queries.
-  - `ssh-bastion-checklist` — narrows down SSH-tunnel failures (TCP / auth / inside-tunnel / hang).
-- **Slash command** `/mysql <SQL>` — quick query through the MCP tool, using the project's recorded profile.
+  - `mysql-debugging` — diagnostic queries for common MySQL errors, locks, slow queries.
+  - `redis-using` — Redis command shape, output mapping, destructive-command list.
+  - `ssh-bastion-checklist` — narrows down SSH-tunnel failures.
+- **Slash commands**:
+  - `/mysql <SQL>` — quick MySQL query.
+  - `/redis <COMMAND>` — quick Redis command.
 
 ### Configuration
 
