@@ -1,10 +1,10 @@
-use crate::core::mysql;
 use crate::output::ExecutionResult;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tools_mcp_core::{Error, Result, TunnelConfig};
+use tools_mcp_core::{Error, Result, Service, TunnelConfig};
 use tools_mcp_orchestrator::config::{Config, ConfigLoader, ConfigMerger, Profile, ServiceType};
+use tools_mcp_orchestrator::{MysqlOrchestrator, MysqlRequest};
 
 /// JSON parameters for the `mysql_exec` MCP tool. Mirrors the CLI's
 /// `mysql` subcommand args plus the global tunnel/config flags, so an
@@ -199,7 +199,25 @@ fn build_tunnel_config(p: &MysqlExecParams) -> Result<Option<TunnelConfig>> {
 pub async fn mysql_exec(params: MysqlExecParams) -> Result<ExecutionResult> {
     let query = params.query.clone();
     let config = params_to_config(&params)?;
-    mysql::execute(config, &query).await
+
+    let host = config
+        .host
+        .ok_or_else(|| Error::Config("MySQL host is required".to_string()))?;
+    let port = config.port.unwrap_or(3306);
+    let user = config
+        .user
+        .ok_or_else(|| Error::Config("MySQL user is required".to_string()))?;
+
+    let req = MysqlRequest {
+        host,
+        port,
+        user,
+        password: config.password,
+        database: config.database,
+        query,
+    };
+
+    MysqlOrchestrator::execute(req, config.tunnel).await
 }
 
 /// JSON parameters for the `redis_exec` MCP tool.

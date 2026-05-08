@@ -3809,6 +3809,7 @@ dependencies = [
  "tokio",
  "toml",
  "tools-mcp-core",
+ "tools-mcp-mysql",
  "tools-mcp-ssh",
 ]
 

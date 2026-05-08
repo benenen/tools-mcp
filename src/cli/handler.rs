@@ -1,7 +1,8 @@
 use crate::cli::{Cli, Commands, TunnelKind};
 use crate::output::CliFormatter;
-use tools_mcp_core::{Error, Result, TunnelConfig};
+use tools_mcp_core::{Error, Result, Service, TunnelConfig};
 use tools_mcp_orchestrator::config::{Config, ConfigLoader, ConfigMerger, ServiceType};
+use tools_mcp_orchestrator::{MysqlOrchestrator, MysqlRequest};
 
 pub struct CliHandler;
 
@@ -211,7 +212,24 @@ impl CliHandler {
     }
 
     async fn execute_mysql(query: &str, config: Config) -> Result<()> {
-        let result = crate::core::mysql::execute(config, query).await?;
+        let host = config
+            .host
+            .ok_or_else(|| Error::Config("MySQL host is required".to_string()))?;
+        let port = config.port.unwrap_or(3306);
+        let user = config
+            .user
+            .ok_or_else(|| Error::Config("MySQL user is required".to_string()))?;
+
+        let req = MysqlRequest {
+            host,
+            port,
+            user,
+            password: config.password,
+            database: config.database,
+            query: query.to_string(),
+        };
+
+        let result = MysqlOrchestrator::execute(req, config.tunnel).await?;
         let output = CliFormatter::format(&result);
         println!("{output}");
         Ok(())
