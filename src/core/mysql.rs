@@ -2,10 +2,10 @@
 //! call into tools_mcp_mysql::execute. CLI handler and MCP tool both
 //! delegate here so teardown semantics are identical.
 
-use crate::tunnel::{DirectTunnel, SshTunnel};
 use tools_mcp_core::{Error, ExecutionResult, Result, Tunnel, TunnelConfig};
 use tools_mcp_mysql::{MysqlParams, execute as mysql_execute};
 use tools_mcp_orchestrator::config::Config;
+use tools_mcp_orchestrator::tunnel::{DirectTunnel, SshTunnel};
 
 pub async fn execute(config: Config, query: &str) -> Result<ExecutionResult> {
     let host = config

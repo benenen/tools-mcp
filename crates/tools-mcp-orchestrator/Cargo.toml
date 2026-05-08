@@ -5,10 +5,13 @@ edition = "2024"
 
 [dependencies]
 async-trait = "0.1"
+russh = "0.46"
 serde = { version = "1.0", features = ["derive"] }
 serde_yml = "0.0.12"
+tokio = { version = "1.40", features = ["full"] }
 toml = "0.8"
 tools-mcp-core = { path = "../tools-mcp-core" }
+tools-mcp-ssh = { path = "../tools-mcp-ssh" }
 
 [dev-dependencies]
 tempfile = "3.12"

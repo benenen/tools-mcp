@@ -4,3 +4,4 @@
 //! `SshTunnel` runtime impls. The bin (cli + mcp) calls into here.
 
 pub mod config;
+pub mod tunnel;

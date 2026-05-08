@@ -2,9 +2,9 @@
 //! call into tools_mcp_redis::execute. CLI handler and MCP tool both
 //! delegate here so teardown semantics are identical.
 
-use crate::tunnel::{DirectTunnel, SshTunnel};
 use tools_mcp_core::{Error, ExecutionResult, Result, Tunnel, TunnelConfig};
 use tools_mcp_orchestrator::config::Config;
+use tools_mcp_orchestrator::tunnel::{DirectTunnel, SshTunnel};
 use tools_mcp_redis::{RedisParams, execute as redis_execute};
 
 pub async fn execute(config: Config, command: &str) -> Result<ExecutionResult> {

@@ -3753,7 +3753,6 @@ dependencies = [
  "comfy-table",
  "reqwest",
  "rmcp",
- "russh",
  "schemars",
  "serde",
  "serde_json",
@@ -3803,11 +3802,14 @@ name = "tools-mcp-orchestrator"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "russh",
  "serde",
  "serde_yml",
  "tempfile",
+ "tokio",
  "toml",
  "tools-mcp-core",
+ "tools-mcp-ssh",
 ]
 
 [[package]]

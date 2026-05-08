@@ -3,9 +3,9 @@
 //! CLI handler and MCP `http_exec` tool both delegate here so both
 //! presentation layers go through identical request + tunnel teardown.
 
-use crate::tunnel::{DirectTunnel, SshTunnel};
 use tools_mcp_core::{Error, ExecutionResult, Result, Tunnel, TunnelConfig};
 use tools_mcp_http::{HttpRequestSpec, execute as http_execute};
+use tools_mcp_orchestrator::tunnel::{DirectTunnel, SshTunnel};
 
 pub async fn execute(
     req: HttpRequestSpec,
