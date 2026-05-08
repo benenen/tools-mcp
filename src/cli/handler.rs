@@ -110,14 +110,22 @@ impl CliHandler {
                 Ok(Some(TunnelConfig::Direct))
             }
             TunnelKind::Ssh => {
-                let ssh_jump = ssh.ssh_jump.clone().ok_or_else(|| {
+                let raw_jump = ssh.ssh_jump.clone().ok_or_else(|| {
                     Error::Config("--ssh-jump is required when --tunnel=ssh".to_string())
                 })?;
+                let ssh_jumps: Vec<String> = raw_jump
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if ssh_jumps.is_empty() {
+                    return Err(Error::Config("--ssh-jump must not be empty".to_string()));
+                }
                 let ssh_user = ssh.ssh_user.clone().ok_or_else(|| {
                     Error::Config("--ssh-user is required when --tunnel=ssh".to_string())
                 })?;
                 Ok(Some(TunnelConfig::Ssh {
-                    ssh_jump,
+                    ssh_jumps,
                     ssh_user,
                     ssh_password: ssh.ssh_password.clone(),
                     ssh_key_path: ssh.ssh_key_path.clone(),

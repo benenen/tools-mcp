@@ -28,7 +28,10 @@ impl FromStr for ServiceType {
 pub enum TunnelConfig {
     Direct,
     Ssh {
-        ssh_jump: String,
+        /// One or more jump hosts in client→target order. YAML/TOML accepts
+        /// either a single string (legacy single-hop) or a sequence of strings.
+        #[serde(rename = "ssh_jump", deserialize_with = "deserialize_string_or_vec")]
+        ssh_jumps: Vec<String>,
         ssh_user: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         ssh_password: Option<String>,
@@ -41,6 +44,22 @@ pub enum TunnelConfig {
 
 fn default_ssh_port() -> u16 {
     22
+}
+
+fn deserialize_string_or_vec<'de, D>(deserializer: D) -> std::result::Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrVec {
+        String(String),
+        Vec(Vec<String>),
+    }
+    match StringOrVec::deserialize(deserializer)? {
+        StringOrVec::String(s) => Ok(vec![s]),
+        StringOrVec::Vec(v) => Ok(v),
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,5 +104,43 @@ mod tests {
         assert_eq!("redis".parse::<ServiceType>().unwrap(), ServiceType::Redis);
         assert_eq!("ssh".parse::<ServiceType>().unwrap(), ServiceType::Ssh);
         assert!("invalid".parse::<ServiceType>().is_err());
+    }
+
+    #[test]
+    fn test_tunnel_config_ssh_accepts_string_for_jump() {
+        let yaml = r#"
+type: ssh
+ssh_jump: bastion.com
+ssh_user: admin
+"#;
+        let cfg: TunnelConfig = serde_yml::from_str(yaml).unwrap();
+        match cfg {
+            TunnelConfig::Ssh { ssh_jumps, ssh_user, .. } => {
+                assert_eq!(ssh_jumps, vec!["bastion.com".to_string()]);
+                assert_eq!(ssh_user, "admin");
+            }
+            _ => panic!("expected Ssh"),
+        }
+    }
+
+    #[test]
+    fn test_tunnel_config_ssh_accepts_array_for_jump() {
+        let yaml = r#"
+type: ssh
+ssh_jump:
+  - bastion1.com
+  - bastion2.com
+ssh_user: admin
+"#;
+        let cfg: TunnelConfig = serde_yml::from_str(yaml).unwrap();
+        match cfg {
+            TunnelConfig::Ssh { ssh_jumps, .. } => {
+                assert_eq!(
+                    ssh_jumps,
+                    vec!["bastion1.com".to_string(), "bastion2.com".to_string()]
+                );
+            }
+            _ => panic!("expected Ssh"),
+        }
     }
 }
