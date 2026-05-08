@@ -1,0 +1,13 @@
+{
+  "name": "tools-mcp-dev",
+  "description": "Local development marketplace for the tools-mcp plugin",
+  "plugins": [
+    {
+      "name": "tools-mcp",
+      "description": "Run MySQL queries through SSH jump hosts (single- or multi-hop). Provides the `mysql_exec` MCP tool plus skills (tools-mcp-using, mysql-debugging, ssh-bastion-checklist) and the `/mysql` slash command.",
+      "version": "0.1.0",
+      "source": "./",
+      "keywords": ["mysql", "ssh", "tunnel", "bastion", "database"]
+    }
+  ]
+}

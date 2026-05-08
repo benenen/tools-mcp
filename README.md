@@ -92,8 +92,10 @@ Example MCP configuration entry (e.g. for Claude Desktop):
 
 ### Use as a Claude Code plugin
 
-This repo ships a `.claude-plugin/plugin.json` + `.mcp.json` so Claude Code
-can load it directly as a plugin (no extra config in `~/.claude/settings.json`).
+This repo ships a Claude Code plugin (`.claude-plugin/plugin.json` +
+`.mcp.json` + `skills/` + `commands/`). Loading the plugin gives Claude
+the `mysql_exec` MCP tool plus three project-specific skills and one
+slash command — all wired up automatically.
 
 Prerequisite: `cargo install --path .` so the `tools-mcp` binary is on `PATH`.
 
@@ -110,8 +112,14 @@ Or, for ad-hoc loading without going through a marketplace:
 claude --plugin-dir /path/to/tools-mcp
 ```
 
-The plugin auto-starts the MCP server on first use; the `mysql_exec` tool
-shows up in the tool list available to Claude.
+What the plugin provides:
+
+- **MCP tool** `mysql_exec` (auto-registered via `.mcp.json`).
+- **Skills** that guide the assistant when working with this tool:
+  - `tools-mcp-using` — parameter shape, three-layer config priority, multi-hop syntax.
+  - `mysql-debugging` — diagnostic queries for common MySQL error codes, locks, slow queries.
+  - `ssh-bastion-checklist` — narrows down SSH-tunnel failures (TCP / auth / inside-tunnel / hang).
+- **Slash command** `/mysql <SQL>` — quick query through the MCP tool, using the project's recorded profile.
 
 ### Configuration
 
