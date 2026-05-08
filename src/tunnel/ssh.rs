@@ -230,15 +230,20 @@ impl SshTunnel {
     async fn build_session_chain(
         &self,
     ) -> Result<Vec<Arc<Mutex<client::Handle<AcceptAnyHostKey>>>>> {
-        // Phase 5: single jump only. Multi-jump implemented in Task 6.
-        let jump = &self.ssh_jumps[0];
         let cfg = std::sync::Arc::new(client::Config::default());
-        let handler = AcceptAnyHostKey { label: jump.clone() };
+        let mut sessions: Vec<Arc<Mutex<client::Handle<AcceptAnyHostKey>>>> =
+            Vec::with_capacity(self.ssh_jumps.len());
 
-        let mut session = client::connect(cfg, (jump.as_str(), self.ssh_port), handler)
-            .await
-            .map_err(|e| Error::Connection(format!("SSH connect to {jump} failed: {e}")))?;
-
+        // Hop 0: TCP-connect directly.
+        let first_jump = &self.ssh_jumps[0];
+        let handler = AcceptAnyHostKey { label: first_jump.clone() };
+        let mut session = client::connect(
+            cfg.clone(),
+            (first_jump.as_str(), self.ssh_port),
+            handler,
+        )
+        .await
+        .map_err(|e| Error::Connection(format!("SSH connect to {first_jump} failed: {e}")))?;
         authenticate(
             &mut session,
             &self.ssh_user,
@@ -246,14 +251,47 @@ impl SshTunnel {
             self.ssh_key_path.as_deref(),
         )
         .await?;
+        sessions.push(Arc::new(Mutex::new(session)));
 
-        if self.ssh_jumps.len() > 1 {
-            return Err(Error::Connection(
-                "multi-hop SSH tunnel not yet implemented (Task 6)".to_string(),
-            ));
+        // Hop 1..N: each over a direct-tcpip channel of the prior session.
+        for next_jump in self.ssh_jumps.iter().skip(1) {
+            let prev = sessions.last().expect("at least one session");
+            let channel = prev
+                .lock()
+                .await
+                .channel_open_direct_tcpip(
+                    next_jump.clone(),
+                    self.ssh_port as u32,
+                    "127.0.0.1",
+                    0u32,
+                )
+                .await
+                .map_err(|e| {
+                    Error::Connection(format!(
+                        "open direct-tcpip to {next_jump}:{} via prior hop failed: {e}",
+                        self.ssh_port
+                    ))
+                })?;
+            // ChannelStream is not Unpin; box-pin so connect_stream's bound holds.
+            let stream = Box::pin(channel.into_stream());
+
+            let handler = AcceptAnyHostKey { label: next_jump.clone() };
+            let mut session = client::connect_stream(cfg.clone(), stream, handler)
+                .await
+                .map_err(|e| {
+                    Error::Connection(format!("SSH connect to {next_jump} (chained) failed: {e}"))
+                })?;
+            authenticate(
+                &mut session,
+                &self.ssh_user,
+                self.ssh_password.as_deref(),
+                self.ssh_key_path.as_deref(),
+            )
+            .await?;
+            sessions.push(Arc::new(Mutex::new(session)));
         }
 
-        Ok(vec![Arc::new(Mutex::new(session))])
+        Ok(sessions)
     }
 }
 
