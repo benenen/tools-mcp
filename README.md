@@ -11,20 +11,24 @@ Unified tool for SSH, MySQL, and Redis connections with MCP (Model Context Proto
 
 ## Status
 
-This is the Phase 5 release. Currently implemented:
+This is the Phase 6 release. Currently implemented:
 
 - MySQL CLI mode (`tools-mcp mysql "..."`) and `mysql_exec` MCP tool.
-- **Redis CLI mode** (`tools-mcp redis "..."`) and `redis_exec` MCP tool.
-- Configuration via YAML file (`--config=PATH`) or TOML profile (`--profile=NAME`).
+- Redis CLI mode (`tools-mcp redis "..."`) and `redis_exec` MCP tool.
+- **HTTP CLI mode** (`tools-mcp http GET https://...`) and `http_exec` MCP tool.
+- Configuration via YAML file (`--config=PATH`) or TOML profile (`--profile=NAME`)
+  for MySQL and Redis. (HTTP profile/YAML is Phase 7+.)
 - Direct connection (`--tunnel=direct` or no `--tunnel`).
 - SSH tunnel (`--tunnel=ssh`) with single- or multi-hop jump (`--ssh-jump=h1[,h2,...]`),
   password or key auth. Host keys accepted with a fingerprint warning.
+  Works for HTTP too — internal HTTPS services accessible via bastion.
 - MCP server mode (`tools-mcp` with no subcommand) over stdio.
 
 Not yet implemented:
 - SSH direct connection (`tools-mcp ssh ...`)
 - SSH key passphrases, per-hop auth overrides, strict known_hosts verification
-- HTTP/SSE MCP transport
+- HTTP profile/YAML config (base_url, default headers, default bearer)
+- HTTP/SSE MCP transport (the SERVER's transport, not the http tool)
 - Redis cluster routing, pub/sub, transactions, scripting (EVAL)
 - Per-Value typed mapping for RESP3 `Map` / `Set` / `Push`
 
@@ -89,6 +93,25 @@ tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=se
 tools-mcp redis "KEYS *" --profile=prod-cache
 ```
 
+### HTTP
+
+```bash
+# Simple GET
+tools-mcp http GET https://api.example.com/users
+
+# POST with JSON body
+tools-mcp http POST https://api.example.com/users \
+  --json --data '{"name":"alice"}' \
+  --bearer "$API_TOKEN"
+
+# Through an SSH jump to an internal HTTPS service
+tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=secret \
+  http GET https://internal-api.local/health
+
+# Self-signed cert internal service (show full status + headers + body)
+tools-mcp http GET https://10.0.0.5/api --insecure -i
+```
+
 ### MCP Server
 
 Run `tools-mcp` with no subcommand to start an MCP server over stdio:
@@ -141,14 +164,17 @@ What the plugin provides:
 - **MCP tools** auto-registered via `.mcp.json`:
   - `mysql_exec` — run a MySQL query.
   - `redis_exec` — run a Redis command.
+  - `http_exec` — send an HTTP request.
 - **Skills** that guide the assistant:
-  - `tools-mcp-using` — parameter shape, three-layer config priority, multi-hop syntax.
+  - `tools-mcp-using` — parameter shape, three-layer config priority, multi-hop syntax (mysql + redis).
   - `mysql-debugging` — diagnostic queries for common MySQL errors, locks, slow queries.
   - `redis-using` — Redis command shape, output mapping, destructive-command list.
+  - `http-using` — HTTP tool input, tunnel routing for internal HTTPS, output mapping.
   - `ssh-bastion-checklist` — narrows down SSH-tunnel failures.
 - **Slash commands**:
   - `/mysql <SQL>` — quick MySQL query.
   - `/redis <COMMAND>` — quick Redis command.
+  - `/http <METHOD> <URL>` — quick HTTP request.
 
 ### Configuration
 

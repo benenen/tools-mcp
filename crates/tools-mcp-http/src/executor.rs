@@ -1,4 +1,4 @@
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION};
+use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Client, Method};
 use tools_mcp_core::{Error, ExecutionResult, Result};
 
@@ -16,12 +16,12 @@ impl HttpExecutor {
         // Headers
         let mut header_map = HeaderMap::new();
         for (name, value) in &req.headers {
-            let h_name: HeaderName = name.parse().map_err(|e| {
-                Error::Config(format!("invalid header name '{name}': {e}"))
-            })?;
-            let h_value: HeaderValue = value.parse().map_err(|e| {
-                Error::Config(format!("invalid header value for '{name}': {e}"))
-            })?;
+            let h_name: HeaderName = name
+                .parse()
+                .map_err(|e| Error::Config(format!("invalid header name '{name}': {e}")))?;
+            let h_value: HeaderValue = value
+                .parse()
+                .map_err(|e| Error::Config(format!("invalid header value for '{name}': {e}")))?;
             header_map.append(h_name, h_value);
         }
 
@@ -70,7 +70,10 @@ async fn response_to_result(response: reqwest::Response) -> Result<ExecutionResu
     // Snapshot headers before consuming the response for the body.
     let mut header_rows: Vec<(String, String)> = Vec::new();
     for (name, value) in response.headers().iter() {
-        let v = value.to_str().unwrap_or("<non-utf8 header value>").to_string();
+        let v = value
+            .to_str()
+            .unwrap_or("<non-utf8 header value>")
+            .to_string();
         header_rows.push((format!("header.{name}"), v));
     }
 

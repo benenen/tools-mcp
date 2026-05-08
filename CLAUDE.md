@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`tools-mcp` is a Rust CLI + MCP server for SSH, MySQL, and Redis. **Phase 5 (current) implements MySQL + Redis CLI modes and matching MCP tools (`mysql_exec`, `redis_exec`)**; SSH direct is the remaining service phase boundary. The design spec lives at `docs/superpowers/specs/2026-05-07-tools-mcp-design.md` and the Phase 1 plan at `docs/superpowers/plans/2026-05-07-tools-mcp-phase1.md`.
+`tools-mcp` is a Rust CLI + MCP server for HTTP, MySQL, Redis, and SSH. **Phase 6 (current) implements MySQL + Redis + HTTP CLI modes and matching MCP tools (`mysql_exec`, `redis_exec`, `http_exec`)**; SSH direct is the remaining service phase boundary. The design spec lives at `docs/superpowers/specs/2026-05-07-tools-mcp-design.md` and the Phase 1 plan at `docs/superpowers/plans/2026-05-07-tools-mcp-phase1.md`.
 
 ## Common Commands
 
@@ -34,12 +34,14 @@ Single integration test crate: `cargo test --test config_tests`.
 | `tools-mcp-core` (lib) | `Tunnel` / `Connection` async traits, `TunnelEndpoint`, `Error`/`Result` (with `Service(String)` for wrapped library errors), `ExecutionResult`. Sole external deps: `async-trait` + `serde`. The dependency floor for the workspace. |
 | `tools-mcp-mysql` (lib) | `MySQLConnection` (impl `core::Connection`), `MySQLExecutor`, and the entry `execute(tunnel, params, query) -> ExecutionResult`. Owns the `mysql_async` dep. Service-agnostic about how the tunnel was built. |
 | `tools-mcp-redis` (lib) | `RedisConnection` (impl `core::Connection`), `RedisExecutor::run(conn, command_str)` (shlex-parsed → `redis::cmd`), and the entry `execute(tunnel, params, command_str) -> ExecutionResult`. Maps `redis::Value` → `ExecutionResult` with simple specialization for Nil/Int/BulkString/SimpleString/Okay/Array; other variants go through Debug-format. Owns the `redis` (with `tokio-comp`) + `shlex` deps. |
+| `tools-mcp-http` (lib) | `HttpRequestSpec` (method/url/headers/body/auth/insecure), `HttpExecutor::run(client, req)` (reqwest send + Response → ExecutionResult), and the entry `execute(tunnel, url_host, url_port, req) -> ExecutionResult`. Owns the `reqwest 0.12` (rustls-tls + gzip + brotli + stream) dep. Maps responses to flat `field`/`value` rows (status_code / status / header.* / body). Doesn't impl `Connection` — HTTP isn't connection-stateful. |
 | `tools-mcp` bin (root `src/cli/*`) | clap `Cli`, `SshTunnelArgs`, `CliHandler` — CLI mode parse + dispatch. |
 | `tools-mcp` bin (root `src/mcp/*`) | rmcp `ServerHandler`, `mysql_exec` tool wiring, params → `Config` conversion. |
 | `tools-mcp` bin (root `src/config/*`) | `Config`, `Profile`, `TunnelConfig`, `ConfigLoader`, `ConfigMerger`. Three-layer merge logic. |
 | `tools-mcp` bin (root `src/tunnel/{direct,ssh}.rs`) | `DirectTunnel` and `SshTunnel` (russh) — the actual `Tunnel` trait impls. Stay in the bin so `tools-mcp-core` stays russh-free. |
 | `tools-mcp` bin (root `src/core/mysql.rs`) | Orchestrator `execute(Config, &str)`: validate Config, build the right tunnel, translate to `tools_mcp_mysql::MysqlParams`, call into the lib. CLI handler and MCP `mysql_exec` both delegate here. |
 | `tools-mcp` bin (root `src/core/redis.rs`) | Orchestrator `execute(Config, &str)`: same shape, but builds `tools_mcp_redis::RedisParams` from `Config.{password,db}` and dispatches to the redis lib. |
+| `tools-mcp` bin (root `src/core/http.rs`) | Orchestrator `execute(HttpRequestSpec, Option<TunnelConfig>)`: parse URL, validate scheme is http/https, derive host:port, build the right tunnel pointing at it, call into the http lib. Doesn't take a `Config` because Phase 6 deferred Profile/YAML for HTTP. |
 | `tools-mcp` bin (root `src/output/cli.rs`) | `CliFormatter` — comfy-table renderer for CLI mode. Operates on `tools_mcp_core::ExecutionResult`. |
 
 ### Config priority (low → high)
@@ -55,6 +57,7 @@ Each layer is a `Config`; `ConfigMerger::merge_multiple` folds them so later lay
 - **SSH tunnel**: implemented in Phase 2 via `tunnel::SshTunnel` (russh-based). Single- and multi-hop jumps via comma-separated `--ssh-jump`; password or key auth; host keys accepted with stderr fingerprint warning. Strict known_hosts verification, key passphrases, and per-hop auth are Phase 3.
 - **MCP server mode**: implemented in Phase 3. `main.rs` runs `mcp::serve_stdio` when no subcommand is given. Single tool `mysql_exec` (in `mcp::tools`) routes to `core::mysql::execute` — same execution path as `tools-mcp mysql "..."`.
 - **Redis subcommand**: implemented in Phase 5. `tools-mcp redis "..."` and the `redis_exec` MCP tool both route through `core::redis::execute`. The `db` field is on `Config`/`Profile` for the Redis database number.
+- **HTTP subcommand**: implemented in Phase 6. `tools-mcp http <METHOD> <URL>` and the `http_exec` MCP tool both route through `core::http::execute`. Tunnel routing uses reqwest's `resolve(host, addr)` override so HTTPS through SSH tunnels preserves SNI / Host header / cert verification. Phase 6 deliberately doesn't support Profile/YAML for HTTP — only CLI flags + global tunnel.
 - **SSH-direct subcommand**: not yet implemented. When added, mirror the existing pattern: a `core::ssh` execution function, a CLI subcommand under `cli::Commands`, and an MCP tool in `mcp::tools` that delegates to the core. CLI and MCP must share the core; never duplicate execution logic in MCP land.
 
 ## Conventions worth knowing
@@ -69,6 +72,7 @@ Each layer is a `Config`; `ConfigMerger::merge_multiple` folds them so later lay
 - **`main.rs` prints errors via `Display` to stderr** (not `Debug`). If touching `main()`, keep the explicit `if let Err(e) = ... { eprintln!("Error: {e}"); exit(1); }` pattern.
 - **Stray SSH flags with `--tunnel=direct`** are a runtime `Error::Config` (not silently ignored); see `cli_to_tunnel_config`.
 - **CLI <-> MCP parity**: every CLI subcommand has (or will have) a paired MCP tool, and both delegate to the same `core::<service>` function. When adding a new subcommand, write the core function first, then wire CLI and MCP on top — never embed business logic in either presentation layer.
+- **Service-specific Profile/YAML support is opt-in**: MySQL and Redis use the 3-layer merge (TOML profile → YAML → CLI args); HTTP currently doesn't (Phase 6 simplification). When adding a new service, decide upfront whether profile support is in scope; if yes, add the relevant fields to `Profile` and `Config` and a `build_config_<svc>` sibling in `cli/handler.rs`. If no, follow the HTTP pattern — orchestrator takes a typed request struct + `Option<TunnelConfig>` directly, no `Config` plumbing.
 - **Per-service config fields**: `Config` is a flat bag of all possible fields across services (`database` for MySQL, `db` for Redis, `key_path` for SSH, etc.). Each orchestrator picks out only what it needs. When adding a new service that requires a new field, add it to `Profile` and `Config` (and the `ConfigMerger::merge` `or` chain) — but only if existing fields can't carry the meaning.
 
 ## Implementation methodology

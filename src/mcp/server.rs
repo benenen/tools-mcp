@@ -63,7 +63,9 @@ impl ToolsMcpServer {
     }
 
     /// Execute an HTTP request, optionally through an SSH tunnel.
-    #[tool(description = "Send an HTTP/HTTPS request and return status, headers, and body. Optionally route through an SSH jump host. Same options as the `tools-mcp http` CLI subcommand.")]
+    #[tool(
+        description = "Send an HTTP/HTTPS request and return status, headers, and body. Optionally route through an SSH jump host. Same options as the `tools-mcp http` CLI subcommand."
+    )]
     async fn http_exec(
         &self,
         Parameters(params): Parameters<crate::mcp::tools::HttpExecParams>,

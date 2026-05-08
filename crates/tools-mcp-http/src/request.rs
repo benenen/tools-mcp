@@ -7,7 +7,10 @@ pub enum HttpAuth {
     /// `Authorization: Bearer <token>`.
     Bearer(String),
     /// `Authorization: Basic <base64(user:pass)>`.
-    Basic { user: String, password: String },
+    Basic {
+        user: String,
+        password: String,
+    },
 }
 
 /// Resolved HTTP request to execute. Caller (CLI handler / MCP tool) builds

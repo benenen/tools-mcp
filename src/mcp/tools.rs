@@ -408,23 +408,22 @@ fn http_params_to_request_and_tunnel(
     let mut header_pairs: Vec<(String, String)> = Vec::new();
     for raw in &p.headers {
         let (name, value) = raw.split_once(':').ok_or_else(|| {
-            Error::Config(format!("header '{raw}' must be 'Name: Value' (missing ':')"))
+            Error::Config(format!(
+                "header '{raw}' must be 'Name: Value' (missing ':')"
+            ))
         })?;
         header_pairs.push((name.trim().to_string(), value.trim().to_string()));
     }
     if p.json {
-        header_pairs.push((
-            "Content-Type".to_string(),
-            "application/json".to_string(),
-        ));
+        header_pairs.push(("Content-Type".to_string(), "application/json".to_string()));
     }
 
     let auth = match (p.bearer, p.basic) {
         (Some(token), None) => tools_mcp_http::HttpAuth::Bearer(token),
         (None, Some(creds)) => {
-            let (user, password) = creds.split_once(':').ok_or_else(|| {
-                Error::Config("basic must be 'user:password'".to_string())
-            })?;
+            let (user, password) = creds
+                .split_once(':')
+                .ok_or_else(|| Error::Config("basic must be 'user:password'".to_string()))?;
             tools_mcp_http::HttpAuth::Basic {
                 user: user.to_string(),
                 password: password.to_string(),
@@ -467,7 +466,9 @@ fn build_tunnel_config_for_http(
     ssh_key_path: Option<String>,
     ssh_port: Option<u16>,
 ) -> Result<Option<TunnelConfig>> {
-    let Some(kind) = kind else { return Ok(None); };
+    let Some(kind) = kind else {
+        return Ok(None);
+    };
     match kind {
         TunnelKind::Direct => {
             let stray = ssh_jump.is_some()
@@ -648,8 +649,14 @@ mod tests {
         let (req, tunnel) = http_params_to_request_and_tunnel(p).unwrap();
         assert_eq!(req.method, "POST");
         assert_eq!(req.url, "https://api.example.com/x");
-        assert!(req.headers.contains(&("X-Foo".to_string(), "bar".to_string())));
-        assert!(req.headers.contains(&("Content-Type".to_string(), "application/json".to_string())));
+        assert!(
+            req.headers
+                .contains(&("X-Foo".to_string(), "bar".to_string()))
+        );
+        assert!(
+            req.headers
+                .contains(&("Content-Type".to_string(), "application/json".to_string()))
+        );
         assert_eq!(req.body.as_deref(), Some(r#"{"a":1}"#.as_bytes()));
         match req.auth {
             tools_mcp_http::HttpAuth::Bearer(t) => assert_eq!(t, "tok"),

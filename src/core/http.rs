@@ -83,7 +83,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_errors_on_unsupported_scheme() {
-        let err = execute(empty_req("ftp://example.com/x"), None).await.unwrap_err();
+        let err = execute(empty_req("ftp://example.com/x"), None)
+            .await
+            .unwrap_err();
         assert!(matches!(err, Error::Config(msg) if msg.contains("unsupported scheme")));
     }
 

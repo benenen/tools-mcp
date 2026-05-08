@@ -271,10 +271,7 @@ impl CliHandler {
             header_pairs.push((name.trim().to_string(), value.trim().to_string()));
         }
         if json {
-            header_pairs.push((
-                "Content-Type".to_string(),
-                "application/json".to_string(),
-            ));
+            header_pairs.push(("Content-Type".to_string(), "application/json".to_string()));
         }
 
         // Body
@@ -282,10 +279,7 @@ impl CliHandler {
             (Some(s), None) => Some(s.into_bytes()),
             (None, Some(path)) => {
                 let bytes = std::fs::read(&path).map_err(|e| {
-                    Error::Config(format!(
-                        "cannot read --data-file '{}': {e}",
-                        path.display()
-                    ))
+                    Error::Config(format!("cannot read --data-file '{}': {e}", path.display()))
                 })?;
                 Some(bytes)
             }
@@ -297,9 +291,9 @@ impl CliHandler {
         let auth = match (bearer, basic) {
             (Some(token), None) => tools_mcp_http::HttpAuth::Bearer(token),
             (None, Some(creds)) => {
-                let (user, password) = creds.split_once(':').ok_or_else(|| {
-                    Error::Config("--basic must be 'user:password'".to_string())
-                })?;
+                let (user, password) = creds
+                    .split_once(':')
+                    .ok_or_else(|| Error::Config("--basic must be 'user:password'".to_string()))?;
                 tools_mcp_http::HttpAuth::Basic {
                     user: user.to_string(),
                     password: password.to_string(),
