@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tools_mcp_core::{Error, Result, Service, TunnelConfig};
 use tools_mcp_orchestrator::config::{Config, ConfigLoader, ConfigMerger, Profile, ServiceType};
-use tools_mcp_orchestrator::{MysqlOrchestrator, MysqlRequest};
+use tools_mcp_orchestrator::{MysqlOrchestrator, MysqlRequest, RedisOrchestrator, RedisRequest};
 
 /// JSON parameters for the `mysql_exec` MCP tool. Mirrors the CLI's
 /// `mysql` subcommand args plus the global tunnel/config flags, so an
@@ -343,7 +343,9 @@ fn build_tunnel_config_for_redis(p: &RedisExecParams) -> Result<Option<TunnelCon
 pub async fn redis_exec(params: RedisExecParams) -> Result<ExecutionResult> {
     let command = params.command.clone();
     let config = redis_params_to_config(&params)?;
-    crate::core::redis::execute(config, &command).await
+    let tunnel = config.tunnel.clone();
+    let req = RedisRequest::from_config(config, command)?;
+    RedisOrchestrator::execute(req, tunnel).await
 }
 
 /// JSON parameters for the `http_exec` MCP tool.

@@ -3810,6 +3810,7 @@ dependencies = [
  "toml",
  "tools-mcp-core",
  "tools-mcp-mysql",
+ "tools-mcp-redis",
  "tools-mcp-ssh",
 ]
 

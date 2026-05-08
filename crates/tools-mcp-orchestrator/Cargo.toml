@@ -12,6 +12,7 @@ tokio = { version = "1.40", features = ["full"] }
 toml = "0.8"
 tools-mcp-core = { path = "../tools-mcp-core" }
 tools-mcp-mysql = { path = "../tools-mcp-mysql" }
+tools-mcp-redis = { path = "../tools-mcp-redis" }
 tools-mcp-ssh = { path = "../tools-mcp-ssh" }
 
 [dev-dependencies]

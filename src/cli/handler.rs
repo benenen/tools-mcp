@@ -2,7 +2,7 @@ use crate::cli::{Cli, Commands, TunnelKind};
 use crate::output::CliFormatter;
 use tools_mcp_core::{Error, Result, Service, TunnelConfig};
 use tools_mcp_orchestrator::config::{Config, ConfigLoader, ConfigMerger, ServiceType};
-use tools_mcp_orchestrator::{MysqlOrchestrator, MysqlRequest};
+use tools_mcp_orchestrator::{MysqlOrchestrator, MysqlRequest, RedisOrchestrator, RedisRequest};
 
 pub struct CliHandler;
 
@@ -264,7 +264,9 @@ impl CliHandler {
     }
 
     async fn execute_redis(command: &str, config: Config) -> Result<()> {
-        let result = crate::core::redis::execute(config, command).await?;
+        let tunnel = config.tunnel.clone();
+        let req = RedisRequest::from_config(config, command.to_string())?;
+        let result = RedisOrchestrator::execute(req, tunnel).await?;
         let output = CliFormatter::format(&result);
         println!("{output}");
         Ok(())

@@ -5,6 +5,8 @@
 
 pub mod config;
 pub mod mysql;
+pub mod redis;
 pub mod tunnel;
 
 pub use mysql::{MysqlOrchestrator, MysqlRequest};
+pub use redis::{RedisOrchestrator, RedisRequest};
