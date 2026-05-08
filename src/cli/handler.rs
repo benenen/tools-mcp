@@ -31,6 +31,17 @@ impl CliHandler {
 
                 Self::execute_mysql(&query, config).await
             }
+            Some(Commands::Redis {
+                command,
+                host,
+                port,
+                password,
+                db,
+                profile,
+            }) => {
+                let config = Self::build_config_redis(&cli, host, port, password, db, profile)?;
+                Self::execute_redis(&command, config).await
+            }
             None => Err(Error::Config(
                 "No command specified. Run with --help for usage.".to_string(),
             )),
@@ -153,6 +164,56 @@ impl CliHandler {
 
     async fn execute_mysql(query: &str, config: Config) -> Result<()> {
         let result = crate::core::mysql::execute(config, query).await?;
+        let output = CliFormatter::format(&result);
+        println!("{output}");
+        Ok(())
+    }
+
+    fn build_config_redis(
+        cli: &Cli,
+        host: Option<String>,
+        port: Option<u16>,
+        password: Option<String>,
+        db: Option<u32>,
+        profile: Option<String>,
+    ) -> Result<Config> {
+        let mut configs: Vec<Config> = Vec::new();
+
+        if let Some(profile_name) = &profile {
+            if let Some(toml_config) = ConfigLoader::load_default_toml()? {
+                let profile_cfg = toml_config.profiles.get(profile_name).ok_or_else(|| {
+                    Error::Config(format!("profile '{profile_name}' not found in config.toml"))
+                })?;
+                configs.push(Self::profile_to_config(profile_cfg));
+            } else {
+                return Err(Error::Config(format!(
+                    "profile '{profile_name}' requested but no ~/.config/tools-mcp/config.toml found"
+                )));
+            }
+        }
+
+        if let Some(config_path) = cli.config.as_deref() {
+            configs.push(ConfigLoader::load_yaml_file(config_path)?);
+        }
+
+        let tunnel_config = Self::cli_to_tunnel_config(cli)?;
+        configs.push(Config {
+            service_type: Some(ServiceType::Redis),
+            host,
+            port,
+            user: None,
+            password,
+            database: None,
+            db,
+            key_path: None,
+            tunnel: tunnel_config,
+        });
+
+        Ok(ConfigMerger::merge_multiple(configs))
+    }
+
+    async fn execute_redis(command: &str, config: Config) -> Result<()> {
+        let result = crate::core::redis::execute(config, command).await?;
         let output = CliFormatter::format(&result);
         println!("{output}");
         Ok(())

@@ -100,6 +100,34 @@ pub enum Commands {
         #[arg(long, help_heading = "MySQL")]
         profile: Option<String>,
     },
+
+    /// Execute a Redis command
+    #[command(override_usage = "tools-mcp [GLOBAL OPTIONS] redis [OPTIONS] <COMMAND>")]
+    #[command(after_help = USAGE_LEGEND)]
+    Redis {
+        /// Redis command to execute (e.g. "GET key" or "HSET h f1 v1").
+        command: String,
+
+        /// Redis host
+        #[arg(long, help_heading = "Redis")]
+        host: Option<String>,
+
+        /// Redis port (default 6379)
+        #[arg(long, help_heading = "Redis")]
+        port: Option<u16>,
+
+        /// Redis password
+        #[arg(long, help_heading = "Redis")]
+        password: Option<String>,
+
+        /// Redis database number (default 0)
+        #[arg(long, help_heading = "Redis")]
+        db: Option<u32>,
+
+        /// Profile name from config
+        #[arg(long, help_heading = "Redis")]
+        profile: Option<String>,
+    },
 }
 
 #[cfg(test)]
