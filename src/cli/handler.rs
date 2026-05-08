@@ -1,10 +1,7 @@
 use crate::cli::{Cli, Commands, TunnelKind};
 use crate::config::{Config, ConfigLoader, ConfigMerger, ServiceType, TunnelConfig};
-use crate::connection::{Connection, MySQLConnection};
 use crate::error::{Error, Result};
-use crate::executor::MySQLExecutor;
 use crate::output::CliFormatter;
-use crate::tunnel::{DirectTunnel, SshTunnel, Tunnel};
 
 pub struct CliHandler;
 
@@ -153,41 +150,8 @@ impl CliHandler {
     }
 
     async fn execute_mysql(query: &str, config: Config) -> Result<()> {
-        let host = config
-            .host
-            .ok_or_else(|| Error::Config("MySQL host is required".to_string()))?;
-        let port = config.port.unwrap_or(3306);
-        let user = config
-            .user
-            .ok_or_else(|| Error::Config("MySQL user is required".to_string()))?;
-
-        let tunnel: Box<dyn Tunnel> = match config.tunnel {
-            None | Some(TunnelConfig::Direct) => Box::new(DirectTunnel::new(host, port)),
-            Some(TunnelConfig::Ssh {
-                ssh_jumps,
-                ssh_user,
-                ssh_password,
-                ssh_key_path,
-                ssh_port,
-            }) => {
-                let key_path = ssh_key_path.map(std::path::PathBuf::from);
-                Box::new(SshTunnel::new(
-                    ssh_jumps,
-                    ssh_user,
-                    ssh_password,
-                    key_path,
-                    ssh_port,
-                    host,
-                    port,
-                )?)
-            }
-        };
-
-        let mut conn = MySQLConnection::new(tunnel, user, config.password, config.database);
-        let exec_result = MySQLExecutor::execute(&mut conn, query).await;
-        // Always tear down the tunnel + pool, even on query error.
-        let _ = conn.disconnect().await;
-        let output = CliFormatter::format(&exec_result?);
+        let result = crate::core::mysql::execute(config, query).await?;
+        let output = CliFormatter::format(&result);
         println!("{output}");
         Ok(())
     }
