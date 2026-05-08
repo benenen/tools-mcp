@@ -510,6 +510,137 @@ pub async fn http_exec(params: HttpExecParams) -> Result<ExecutionResult> {
     crate::core::http::execute(req, tunnel_config).await
 }
 
+/// JSON parameters for the `ssh_exec` MCP tool.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct SshExecParams {
+    /// Shell command to execute on the target.
+    pub command: String,
+
+    /// Target SSH host.
+    pub host: String,
+
+    /// Target SSH port (default 22).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+
+    /// Target SSH user.
+    pub user: String,
+
+    /// Target SSH password (mutually exclusive with key_path).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+
+    /// Target SSH key path. Unencrypted keys only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_path: Option<String>,
+
+    /// Tunnel kind. "direct" (default) or "ssh".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tunnel: Option<TunnelKind>,
+
+    /// SSH jump host(s).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_jump: Option<SshJumpInput>,
+
+    /// SSH jump user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_user: Option<String>,
+
+    /// SSH jump password.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_password: Option<String>,
+
+    /// SSH jump key path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_key_path: Option<String>,
+
+    /// SSH jump port (default 22).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_port: Option<u16>,
+}
+
+fn ssh_params_to_request_and_tunnel(
+    p: SshExecParams,
+) -> Result<(tools_mcp_ssh::SshExecRequest, Option<TunnelConfig>)> {
+    if p.password.is_some() && p.key_path.is_some() {
+        return Err(Error::Config(
+            "password and key_path are mutually exclusive".to_string(),
+        ));
+    }
+
+    let req = tools_mcp_ssh::SshExecRequest {
+        host: p.host,
+        port: p.port.unwrap_or(22),
+        user: p.user,
+        password: p.password,
+        key_path: p.key_path.map(std::path::PathBuf::from),
+        command: p.command,
+    };
+
+    let tunnel_config = build_tunnel_config_for_ssh_direct(
+        p.tunnel,
+        p.ssh_jump,
+        p.ssh_user,
+        p.ssh_password,
+        p.ssh_key_path,
+        p.ssh_port,
+    )?;
+
+    Ok((req, tunnel_config))
+}
+
+fn build_tunnel_config_for_ssh_direct(
+    kind: Option<TunnelKind>,
+    ssh_jump: Option<SshJumpInput>,
+    ssh_user: Option<String>,
+    ssh_password: Option<String>,
+    ssh_key_path: Option<String>,
+    ssh_port: Option<u16>,
+) -> Result<Option<TunnelConfig>> {
+    let Some(kind) = kind else {
+        return Ok(None);
+    };
+    match kind {
+        TunnelKind::Direct => {
+            let stray = ssh_jump.is_some()
+                || ssh_user.is_some()
+                || ssh_password.is_some()
+                || ssh_key_path.is_some()
+                || ssh_port.is_some();
+            if stray {
+                return Err(Error::Config(
+                    "ssh_* fields are only valid with tunnel = \"ssh\"".to_string(),
+                ));
+            }
+            Ok(Some(TunnelConfig::Direct))
+        }
+        TunnelKind::Ssh => {
+            let jumps = ssh_jump.map(SshJumpInput::into_jumps).ok_or_else(|| {
+                Error::Config("ssh_jump is required when tunnel = \"ssh\"".to_string())
+            })?;
+            if jumps.is_empty() {
+                return Err(Error::Config("ssh_jump must not be empty".to_string()));
+            }
+            let ssh_user = ssh_user.ok_or_else(|| {
+                Error::Config("ssh_user is required when tunnel = \"ssh\"".to_string())
+            })?;
+            Ok(Some(TunnelConfig::Ssh {
+                ssh_jumps: jumps,
+                ssh_user,
+                ssh_password,
+                ssh_key_path,
+                ssh_port: ssh_port.unwrap_or(22),
+            }))
+        }
+    }
+}
+
+/// Public entry point for the ssh_exec tool.
+pub async fn ssh_exec(params: SshExecParams) -> Result<ExecutionResult> {
+    let (req, tunnel_config) = ssh_params_to_request_and_tunnel(params)?;
+    crate::core::ssh::execute(req, tunnel_config).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -663,5 +794,51 @@ mod tests {
             other => panic!("expected Bearer, got {other:?}"),
         }
         assert!(tunnel.is_none());
+    }
+
+    #[test]
+    fn test_ssh_params_to_request_basic() {
+        let p = SshExecParams {
+            command: "uptime".into(),
+            host: "server.com".into(),
+            port: None,
+            user: "admin".into(),
+            password: Some("pwd".into()),
+            key_path: None,
+            tunnel: None,
+            ssh_jump: None,
+            ssh_user: None,
+            ssh_password: None,
+            ssh_key_path: None,
+            ssh_port: None,
+        };
+        let (req, tunnel) = ssh_params_to_request_and_tunnel(p).unwrap();
+        assert_eq!(req.command, "uptime");
+        assert_eq!(req.host, "server.com");
+        assert_eq!(req.port, 22);
+        assert_eq!(req.user, "admin");
+        assert_eq!(req.password.as_deref(), Some("pwd"));
+        assert!(req.key_path.is_none());
+        assert!(tunnel.is_none());
+    }
+
+    #[test]
+    fn test_ssh_params_password_and_key_mutex() {
+        let p = SshExecParams {
+            command: "ls".into(),
+            host: "h".into(),
+            port: None,
+            user: "u".into(),
+            password: Some("pwd".into()),
+            key_path: Some("/k".into()),
+            tunnel: None,
+            ssh_jump: None,
+            ssh_user: None,
+            ssh_password: None,
+            ssh_key_path: None,
+            ssh_port: None,
+        };
+        let err = ssh_params_to_request_and_tunnel(p).unwrap_err();
+        assert!(matches!(err, Error::Config(msg) if msg.contains("mutually exclusive")));
     }
 }
