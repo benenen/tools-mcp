@@ -7,6 +7,7 @@ pub enum ServiceType {
     Mysql,
     Redis,
     Ssh,
+    Http,
 }
 
 impl FromStr for ServiceType {
@@ -17,6 +18,7 @@ impl FromStr for ServiceType {
             "mysql" => Ok(ServiceType::Mysql),
             "redis" => Ok(ServiceType::Redis),
             "ssh" => Ok(ServiceType::Ssh),
+            "http" => Ok(ServiceType::Http),
             _ => Err(format!("Invalid service type: {}", s)),
         }
     }
