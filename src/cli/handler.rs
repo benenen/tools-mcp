@@ -95,7 +95,20 @@ impl CliHandler {
             return Ok(None);
         };
         match kind {
-            TunnelKind::Direct => Ok(Some(TunnelConfig::Direct)),
+            TunnelKind::Direct => {
+                // Reject SSH flags supplied with --tunnel=direct
+                let stray_ssh = cli.ssh_jump.is_some()
+                    || cli.ssh_user.is_some()
+                    || cli.ssh_password.is_some()
+                    || cli.ssh_key_path.is_some()
+                    || cli.ssh_port.is_some();
+                if stray_ssh {
+                    return Err(Error::Config(
+                        "SSH options (--ssh-*) are only valid with --tunnel=ssh".to_string(),
+                    ));
+                }
+                Ok(Some(TunnelConfig::Direct))
+            }
             TunnelKind::Ssh => {
                 let ssh_jump = cli.ssh_jump.clone().ok_or_else(|| {
                     Error::Config("--ssh-jump is required when --tunnel=ssh".to_string())

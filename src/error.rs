@@ -7,7 +7,7 @@ pub enum Error {
     Execution(String),
     Io(std::io::Error),
     Mysql(mysql_async::Error),
-    Yaml(serde_yaml::Error),
+    Yaml(serde_yml::Error),
     Toml(toml::de::Error),
 }
 
@@ -49,8 +49,8 @@ impl From<mysql_async::Error> for Error {
     }
 }
 
-impl From<serde_yaml::Error> for Error {
-    fn from(e: serde_yaml::Error) -> Self {
+impl From<serde_yml::Error> for Error {
+    fn from(e: serde_yml::Error) -> Self {
         Error::Yaml(e)
     }
 }

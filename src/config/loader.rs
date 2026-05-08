@@ -18,19 +18,21 @@ impl ConfigLoader {
         let content = std::fs::read_to_string(path).map_err(|e| {
             Error::Config(format!("cannot read YAML file '{}': {}", path.display(), e))
         })?;
-        serde_yaml::from_str(&content).map_err(|e| {
+        serde_yml::from_str(&content).map_err(|e| {
             Error::Config(format!("invalid YAML in '{}': {}", path.display(), e))
         })
     }
 
     pub fn load_default_toml() -> Result<Option<TomlConfig>> {
-        let home = std::env::var("HOME").map_err(|_| {
-            Error::Config("HOME environment variable not set".to_string())
-        })?;
-        let config_path = Path::new(&home)
-            .join(".config")
-            .join("tools-mcp")
-            .join("config.toml");
+        let config_dir = if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
+            std::path::PathBuf::from(xdg)
+        } else {
+            let home = std::env::var("HOME").map_err(|_| {
+                Error::Config("HOME environment variable not set".to_string())
+            })?;
+            std::path::PathBuf::from(home).join(".config")
+        };
+        let config_path = config_dir.join("tools-mcp").join("config.toml");
 
         if config_path.exists() {
             Ok(Some(Self::load_toml_file(&config_path)?))
