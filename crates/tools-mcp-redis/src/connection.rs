@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use redis::aio::MultiplexedConnection;
 use redis::Client;
+use redis::aio::MultiplexedConnection;
 use tools_mcp_core::{Connection, Error, Result, Tunnel};
 
 pub struct RedisConnection {
@@ -26,9 +26,9 @@ impl RedisConnection {
         if self.conn.is_none() {
             self.connect().await?;
         }
-        self.conn.as_mut().ok_or_else(|| {
-            Error::Connection("Redis connection not established".to_string())
-        })
+        self.conn
+            .as_mut()
+            .ok_or_else(|| Error::Connection("Redis connection not established".to_string()))
     }
 }
 

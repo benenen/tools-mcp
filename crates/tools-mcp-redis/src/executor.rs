@@ -1,4 +1,4 @@
-use redis::{cmd, Value};
+use redis::{Value, cmd};
 use tools_mcp_core::{Error, ExecutionResult, Result};
 
 use crate::connection::RedisConnection;

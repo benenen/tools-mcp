@@ -40,7 +40,9 @@ impl ToolsMcpServer {
     }
 
     /// Execute a Redis command, optionally through an SSH tunnel.
-    #[tool(description = "Execute a Redis command, optionally through an SSH jump host. Same connection options as the `tools-mcp redis` CLI subcommand.")]
+    #[tool(
+        description = "Execute a Redis command, optionally through an SSH jump host. Same connection options as the `tools-mcp redis` CLI subcommand."
+    )]
     async fn redis_exec(
         &self,
         Parameters(params): Parameters<crate::mcp::tools::RedisExecParams>,
