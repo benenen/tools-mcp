@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(name = "tools-mcp")]
@@ -6,30 +7,30 @@ use clap::{Parser, Subcommand, ValueEnum};
 pub struct Cli {
     /// Path to YAML config file
     #[arg(long, global = true)]
-    pub config: Option<String>,
+    pub config: Option<PathBuf>,
 
     /// Tunnel type (direct or ssh)
     #[arg(long, global = true, value_enum)]
     pub tunnel: Option<TunnelKind>,
 
     /// SSH jump host (used when --tunnel=ssh)
-    #[arg(long, global = true)]
+    #[arg(long, global = true, requires = "tunnel")]
     pub ssh_jump: Option<String>,
 
     /// SSH jump user (used when --tunnel=ssh)
-    #[arg(long, global = true)]
+    #[arg(long, global = true, requires = "tunnel")]
     pub ssh_user: Option<String>,
 
     /// SSH jump password (used when --tunnel=ssh)
-    #[arg(long, global = true)]
+    #[arg(long, global = true, requires = "tunnel")]
     pub ssh_password: Option<String>,
 
     /// SSH key path (used when --tunnel=ssh)
-    #[arg(long, global = true)]
+    #[arg(long, global = true, requires = "tunnel")]
     pub ssh_key_path: Option<String>,
 
     /// SSH jump port (used when --tunnel=ssh)
-    #[arg(long, global = true)]
+    #[arg(long, global = true, requires = "tunnel")]
     pub ssh_port: Option<u16>,
 
     #[command(subcommand)]
@@ -37,7 +38,6 @@ pub struct Cli {
 }
 
 #[derive(ValueEnum, Clone, Debug)]
-#[clap(rename_all = "lowercase")]
 pub enum TunnelKind {
     Direct,
     Ssh,
@@ -99,5 +99,36 @@ mod tests {
             }
             _ => panic!("Expected Mysql command"),
         }
+    }
+
+    #[test]
+    fn test_ssh_flag_requires_tunnel() {
+        // Providing --ssh-jump without --tunnel should fail parsing
+        let result = Cli::try_parse_from(&[
+            "tools-mcp",
+            "--ssh-jump=bastion.com",
+            "mysql",
+            "SELECT 1",
+        ]);
+        assert!(result.is_err(), "expected parse error when --ssh-jump used without --tunnel");
+    }
+
+    #[test]
+    fn test_tunnel_kind_parse() {
+        let cli = Cli::try_parse_from(&[
+            "tools-mcp",
+            "--tunnel=ssh",
+            "mysql",
+            "SELECT 1",
+        ]).unwrap();
+        assert!(matches!(cli.tunnel, Some(TunnelKind::Ssh)));
+
+        let cli = Cli::try_parse_from(&[
+            "tools-mcp",
+            "--tunnel=direct",
+            "mysql",
+            "SELECT 1",
+        ]).unwrap();
+        assert!(matches!(cli.tunnel, Some(TunnelKind::Direct)));
     }
 }
