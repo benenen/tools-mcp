@@ -16,9 +16,11 @@ async-trait = "0.1"
 clap = { version = "4.5", features = ["derive"] }
 comfy-table = "7.1"
 mysql_async = "0.34"
+rmcp = { version = "1.6", features = ["server", "transport-io"] }
 russh = "0.46"
 serde = { version = "1.0", features = ["derive"] }
 serde_yml = "0.0.12"
+schemars = "0.8"
 tokio = { version = "1.40", features = ["full"] }
 toml = "0.8"
 

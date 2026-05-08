@@ -3,6 +3,7 @@ pub mod config;
 pub mod connection;
 pub mod error;
 pub mod executor;
+pub mod mcp;
 pub mod output;
 pub mod tunnel;
 
