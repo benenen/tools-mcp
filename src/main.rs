@@ -1,16 +1,19 @@
 use clap::Parser;
 use tools_mcp::cli::{Cli, CliHandler};
+use tools_mcp::mcp;
 
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
 
-    if cli.command.is_none() {
-        eprintln!("MCP mode not yet implemented. Use a subcommand (mysql) for CLI mode.");
-        std::process::exit(1);
-    }
+    let result = if cli.command.is_none() {
+        // No subcommand -> run MCP server over stdio.
+        mcp::serve_stdio().await
+    } else {
+        CliHandler::handle(cli).await
+    };
 
-    if let Err(e) = CliHandler::handle(cli).await {
+    if let Err(e) = result {
         eprintln!("Error: {e}");
         std::process::exit(1);
     }
