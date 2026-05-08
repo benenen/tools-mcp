@@ -1,15 +1,12 @@
-use crate::config::{Config, TunnelConfig};
-use crate::connection::{Connection, MySQLConnection};
-use tools_mcp_core::{Error, Result};
-use crate::executor::MySQLExecutor;
-use crate::output::ExecutionResult;
-use crate::tunnel::{DirectTunnel, SshTunnel, Tunnel};
+//! Orchestrator: take a fully-resolved Config, build the right tunnel,
+//! call into tools_mcp_mysql::execute. CLI handler and MCP tool both
+//! delegate here so teardown semantics are identical.
 
-/// Execute a single MySQL query against the connection described by `config`.
-///
-/// Errors if `config.host` or `config.user` is missing. Always tears down
-/// the underlying connection (and SSH tunnel, if any) before returning,
-/// regardless of whether the query succeeded.
+use crate::config::{Config, TunnelConfig};
+use crate::tunnel::{DirectTunnel, SshTunnel};
+use tools_mcp_core::{Error, ExecutionResult, Result, Tunnel};
+use tools_mcp_mysql::{execute as mysql_execute, MysqlParams};
+
 pub async fn execute(config: Config, query: &str) -> Result<ExecutionResult> {
     let host = config
         .host
@@ -41,10 +38,13 @@ pub async fn execute(config: Config, query: &str) -> Result<ExecutionResult> {
         }
     };
 
-    let mut conn = MySQLConnection::new(tunnel, user, config.password, config.database);
-    let exec_result = MySQLExecutor::execute(&mut conn, query).await;
-    let _ = conn.disconnect().await;
-    exec_result
+    let params = MysqlParams {
+        user,
+        password: config.password,
+        database: config.database,
+    };
+
+    mysql_execute(tunnel, params, query).await
 }
 
 #[cfg(test)]

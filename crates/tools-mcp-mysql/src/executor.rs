@@ -1,7 +1,6 @@
 use crate::connection::MySQLConnection;
-use crate::output::ExecutionResult;
 use mysql_async::{Row, Value, prelude::*};
-use tools_mcp_core::{Error, Result};
+use tools_mcp_core::{Error, ExecutionResult, Result};
 
 pub struct MySQLExecutor;
 
