@@ -6,6 +6,7 @@ use tools_mcp_core::{Error, Result, Service, TunnelConfig};
 use tools_mcp_orchestrator::config::{Config, ConfigLoader, ConfigMerger, Profile, ServiceType};
 use tools_mcp_orchestrator::{
     HttpOrchestrator, MysqlOrchestrator, MysqlRequest, RedisOrchestrator, RedisRequest,
+    SshDirectOrchestrator,
 };
 
 /// JSON parameters for the `mysql_exec` MCP tool. Mirrors the CLI's
@@ -644,7 +645,7 @@ fn build_tunnel_config_for_ssh_direct(
 /// Public entry point for the ssh_exec tool.
 pub async fn ssh_exec(params: SshExecParams) -> Result<ExecutionResult> {
     let (req, tunnel_config) = ssh_params_to_request_and_tunnel(params)?;
-    crate::core::ssh::execute(req, tunnel_config).await
+    SshDirectOrchestrator::execute(req, tunnel_config).await
 }
 
 #[cfg(test)]

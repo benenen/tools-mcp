@@ -7,8 +7,10 @@ pub mod config;
 pub mod http;
 pub mod mysql;
 pub mod redis;
+pub mod ssh;
 pub mod tunnel;
 
 pub use http::HttpOrchestrator;
 pub use mysql::{MysqlOrchestrator, MysqlRequest};
 pub use redis::{RedisOrchestrator, RedisRequest};
+pub use ssh::SshDirectOrchestrator;
