@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`tools-mcp` is a Rust CLI / future MCP server for SSH, MySQL, and Redis. **Phase 2 (current) implements MySQL CLI mode with SSH tunnel support**; Redis, SSH direct, and MCP server mode are explicit phase boundaries (see below). The design spec lives at `docs/superpowers/specs/2026-05-07-tools-mcp-design.md` and the Phase 1 plan at `docs/superpowers/plans/2026-05-07-tools-mcp-phase1.md`.
+`tools-mcp` is a Rust CLI + MCP server for SSH, MySQL, and Redis. **Phase 3 (current) implements MySQL CLI mode + MCP server mode with the `mysql_exec` tool**; Redis and SSH direct are explicit phase boundaries (see below). The design spec lives at `docs/superpowers/specs/2026-05-07-tools-mcp-design.md` and the Phase 1 plan at `docs/superpowers/plans/2026-05-07-tools-mcp-phase1.md`.
 
 ## Common Commands
 
@@ -38,6 +38,8 @@ Single integration test crate: `cargo test --test config_tests`.
 | `tunnel::{traits,direct,ssh}` | async `Tunnel` trait; `DirectTunnel` (no tunnel) and `SshTunnel` (russh-based, single/multi-hop, accept-any host key) |
 | `connection::{traits,mysql}` | async `Connection` trait; `MySQLConnection` takes `Box<dyn Tunnel>` and opens a `mysql_async::Pool` from `tunnel.establish()`'s endpoint |
 | `executor::mysql` | `MySQLExecutor::execute(&mut MySQLConnection, &str)` — query + Value→String |
+| `core::mysql` | `execute(config, query) -> ExecutionResult` — the shared MySQL execution path. CLI handler and MCP tool both delegate here so teardown semantics are identical. |
+| `mcp::{server,tools}` | rmcp-based stdio server. Single `mysql_exec` tool delegates to `core::mysql::execute`. Tool params mirror the CLI's `mysql` subcommand args + global tunnel/config flags. |
 | `output::{types,cli}` | `ExecutionResult { columns, rows, affected_rows }`; `CliFormatter` renders a `comfy-table` UTF-8 box |
 
 ### Config priority (low → high)
@@ -51,7 +53,8 @@ Each layer is a `Config`; `ConfigMerger::merge_multiple` folds them so later lay
 ### Phase boundaries (where to gate features that aren't yet implemented)
 
 - **SSH tunnel**: implemented in Phase 2 via `tunnel::SshTunnel` (russh-based). Single- and multi-hop jumps via comma-separated `--ssh-jump`; password or key auth; host keys accepted with stderr fingerprint warning. Strict known_hosts verification, key passphrases, and per-hop auth are Phase 3.
-- **MCP server mode**: triggered when no subcommand is given; `main.rs` prints a placeholder and exits 1. (Unchanged from Phase 1.)
+- **MCP server mode**: implemented in Phase 3. `main.rs` runs `mcp::serve_stdio` when no subcommand is given. Single tool `mysql_exec` (in `mcp::tools`) routes to `core::mysql::execute` — same execution path as `tools-mcp mysql "..."`.
+- **Redis / SSH-direct subcommands**: not yet implemented. When added, mirror the existing pattern: a `core::<service>` execution function, a CLI subcommand under `cli::Commands`, and an MCP tool in `mcp::tools` that delegates to the core. CLI and MCP must share the core; never duplicate execution logic in MCP land.
 
 ## Conventions worth knowing
 
@@ -64,6 +67,7 @@ Each layer is a `Config`; `ConfigMerger::merge_multiple` folds them so later lay
 - **`Error::source()`**: when adding an error variant that wraps an underlying error, extend the exhaustive `match` so the cause chain stays intact.
 - **`main.rs` prints errors via `Display` to stderr** (not `Debug`). If touching `main()`, keep the explicit `if let Err(e) = ... { eprintln!("Error: {e}"); exit(1); }` pattern.
 - **Stray SSH flags with `--tunnel=direct`** are a runtime `Error::Config` (not silently ignored); see `cli_to_tunnel_config`.
+- **CLI <-> MCP parity**: every CLI subcommand has (or will have) a paired MCP tool, and both delegate to the same `core::<service>` function. When adding a new subcommand, write the core function first, then wire CLI and MCP on top — never embed business logic in either presentation layer.
 
 ## Implementation methodology
 

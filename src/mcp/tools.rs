@@ -109,7 +109,10 @@ fn params_to_config(p: &MysqlExecParams) -> Result<Config> {
             ))
         })?;
         let profile_cfg = toml_config.profiles.get(profile_name).ok_or_else(|| {
-            Error::Config(format!("profile '{}' not found in config.toml", profile_name))
+            Error::Config(format!(
+                "profile '{}' not found in config.toml",
+                profile_name
+            ))
         })?;
         configs.push(profile_to_config(profile_cfg));
     }

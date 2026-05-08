@@ -11,20 +11,22 @@ Unified tool for SSH, MySQL, and Redis connections with MCP (Model Context Proto
 
 ## Status
 
-This is the Phase 2 release. Currently implemented:
+This is the Phase 3 release. Currently implemented:
 
 - MySQL CLI mode (`tools-mcp mysql "..."`)
 - Configuration via YAML file (`--config=PATH`) or TOML profile (`--profile=NAME`)
 - Direct connection (`--tunnel=direct` or no `--tunnel` flag)
 - SSH tunnel (`--tunnel=ssh`) with single- or multi-hop jump (`--ssh-jump=h1[,h2,...]`),
   password or key auth (`--ssh-password` / `--ssh-key-path`).
-  Host keys are accepted with a fingerprint warning (Phase 3 will add strict checking).
+  Host keys are accepted with a fingerprint warning (a future phase will add strict checking).
+- **MCP server mode** (run `tools-mcp` with no subcommand): exposes a `mysql_exec`
+  tool to AI clients over stdio. Same connection / tunnel / profile options as the CLI.
 
 Not yet implemented:
 - Redis support
 - SSH direct connection (`tools-mcp ssh ...`)
-- MCP server mode (running without a subcommand prints a placeholder)
 - SSH key passphrases, per-hop auth overrides, strict known_hosts verification
+- HTTP/SSE MCP transport
 
 ## Installation
 
@@ -54,6 +56,31 @@ tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=se
 tools-mcp --tunnel=ssh --ssh-jump=bastion1.com,bastion2.com --ssh-user=admin \
   --ssh-key-path=~/.ssh/jump_key \
   mysql --host=mysql.internal --user=root --password=dbpass "SELECT 1"
+```
+
+### MCP Server
+
+Run `tools-mcp` with no subcommand to start an MCP server over stdio:
+
+```bash
+tools-mcp
+```
+
+It exposes one tool, `mysql_exec`, with the same parameters as the CLI's
+`mysql` subcommand (host/port/user/password/database/profile + tunnel/ssh_*).
+AI clients (Claude Desktop, Cursor, etc.) can call this tool to run MySQL
+queries through SSH jump hosts.
+
+Example MCP configuration entry (e.g. for Claude Desktop):
+
+```json
+{
+  "mcpServers": {
+    "tools-mcp": {
+      "command": "/usr/local/bin/tools-mcp"
+    }
+  }
+}
 ```
 
 ### Configuration

@@ -1,4 +1,4 @@
-use crate::mcp::tools::{mysql_exec, MysqlExecParams};
+use crate::mcp::tools::{MysqlExecParams, mysql_exec};
 use rmcp::{
     ServerHandler, ServiceExt,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -8,6 +8,7 @@ use rmcp::{
 
 #[derive(Debug, Clone)]
 pub struct ToolsMcpServer {
+    #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
 }
 
@@ -20,7 +21,9 @@ impl ToolsMcpServer {
     }
 
     /// Execute a MySQL query, optionally through an SSH tunnel.
-    #[tool(description = "Execute a MySQL query, optionally through an SSH jump host. Same connection options as the `tools-mcp mysql` CLI subcommand.")]
+    #[tool(
+        description = "Execute a MySQL query, optionally through an SSH jump host. Same connection options as the `tools-mcp mysql` CLI subcommand."
+    )]
     async fn mysql_exec(
         &self,
         Parameters(params): Parameters<MysqlExecParams>,
@@ -28,10 +31,7 @@ impl ToolsMcpServer {
         match mysql_exec(params).await {
             Ok(result) => {
                 let json = serde_json::to_string_pretty(&result).map_err(|e| {
-                    rmcp::ErrorData::internal_error(
-                        format!("serialize result failed: {e}"),
-                        None,
-                    )
+                    rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
                 })?;
                 Ok(CallToolResult::success(vec![Content::text(json)]))
             }
@@ -43,13 +43,12 @@ impl ToolsMcpServer {
 #[tool_handler]
 impl ServerHandler for ToolsMcpServer {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-            .with_instructions(
-                "tools-mcp: MySQL query execution with optional SSH tunneling. \
+        ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
+            "tools-mcp: MySQL query execution with optional SSH tunneling. \
                  Use the mysql_exec tool. Connection params can come from a TOML \
                  profile (~/.config/tools-mcp/config.toml), a YAML file, or be \
                  supplied directly in the tool call.",
-            )
+        )
     }
 }
 
