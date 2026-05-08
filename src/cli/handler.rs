@@ -94,14 +94,14 @@ impl CliHandler {
         let Some(kind) = cli.tunnel else {
             return Ok(None);
         };
+        let ssh = &cli.ssh;
         match kind {
             TunnelKind::Direct => {
-                // Reject SSH flags supplied with --tunnel=direct
-                let stray_ssh = cli.ssh_jump.is_some()
-                    || cli.ssh_user.is_some()
-                    || cli.ssh_password.is_some()
-                    || cli.ssh_key_path.is_some()
-                    || cli.ssh_port.is_some();
+                let stray_ssh = ssh.ssh_jump.is_some()
+                    || ssh.ssh_user.is_some()
+                    || ssh.ssh_password.is_some()
+                    || ssh.ssh_key_path.is_some()
+                    || ssh.ssh_port.is_some();
                 if stray_ssh {
                     return Err(Error::Config(
                         "SSH options (--ssh-*) are only valid with --tunnel=ssh".to_string(),
@@ -110,18 +110,18 @@ impl CliHandler {
                 Ok(Some(TunnelConfig::Direct))
             }
             TunnelKind::Ssh => {
-                let ssh_jump = cli.ssh_jump.clone().ok_or_else(|| {
+                let ssh_jump = ssh.ssh_jump.clone().ok_or_else(|| {
                     Error::Config("--ssh-jump is required when --tunnel=ssh".to_string())
                 })?;
-                let ssh_user = cli.ssh_user.clone().ok_or_else(|| {
+                let ssh_user = ssh.ssh_user.clone().ok_or_else(|| {
                     Error::Config("--ssh-user is required when --tunnel=ssh".to_string())
                 })?;
                 Ok(Some(TunnelConfig::Ssh {
                     ssh_jump,
                     ssh_user,
-                    ssh_password: cli.ssh_password.clone(),
-                    ssh_key_path: cli.ssh_key_path.clone(),
-                    ssh_port: cli.ssh_port.unwrap_or(22),
+                    ssh_password: ssh.ssh_password.clone(),
+                    ssh_key_path: ssh.ssh_key_path.clone(),
+                    ssh_port: ssh.ssh_port.unwrap_or(22),
                 }))
             }
         }
