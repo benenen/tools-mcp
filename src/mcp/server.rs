@@ -1,8 +1,68 @@
-use crate::error::{Error, Result};
+use crate::mcp::tools::{mysql_exec, MysqlExecParams};
+use rmcp::{
+    ServerHandler, ServiceExt,
+    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
+    model::{CallToolResult, Content, ServerCapabilities, ServerInfo},
+    tool, tool_handler, tool_router,
+};
+
+#[derive(Debug, Clone)]
+pub struct ToolsMcpServer {
+    tool_router: ToolRouter<Self>,
+}
+
+#[tool_router]
+impl ToolsMcpServer {
+    pub fn new() -> Self {
+        Self {
+            tool_router: Self::tool_router(),
+        }
+    }
+
+    /// Execute a MySQL query, optionally through an SSH tunnel.
+    #[tool(description = "Execute a MySQL query, optionally through an SSH jump host. Same connection options as the `tools-mcp mysql` CLI subcommand.")]
+    async fn mysql_exec(
+        &self,
+        Parameters(params): Parameters<MysqlExecParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        match mysql_exec(params).await {
+            Ok(result) => {
+                let json = serde_json::to_string_pretty(&result).map_err(|e| {
+                    rmcp::ErrorData::internal_error(
+                        format!("serialize result failed: {e}"),
+                        None,
+                    )
+                })?;
+                Ok(CallToolResult::success(vec![Content::text(json)]))
+            }
+            Err(e) => Ok(CallToolResult::error(vec![Content::text(e.to_string())])),
+        }
+    }
+}
+
+#[tool_handler]
+impl ServerHandler for ToolsMcpServer {
+    fn get_info(&self) -> ServerInfo {
+        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+            .with_instructions(
+                "tools-mcp: MySQL query execution with optional SSH tunneling. \
+                 Use the mysql_exec tool. Connection params can come from a TOML \
+                 profile (~/.config/tools-mcp/config.toml), a YAML file, or be \
+                 supplied directly in the tool call.",
+            )
+    }
+}
 
 /// Run the MCP server over stdio. Blocks until the client disconnects.
-pub async fn serve_stdio() -> Result<()> {
-    Err(Error::Connection(
-        "MCP server not yet implemented".to_string(),
-    ))
+pub async fn serve_stdio() -> crate::error::Result<()> {
+    let server = ToolsMcpServer::new();
+    let service = server
+        .serve(rmcp::transport::stdio())
+        .await
+        .map_err(|e| crate::error::Error::Connection(format!("MCP server start failed: {e}")))?;
+    service
+        .waiting()
+        .await
+        .map_err(|e| crate::error::Error::Connection(format!("MCP server error: {e}")))?;
+    Ok(())
 }
