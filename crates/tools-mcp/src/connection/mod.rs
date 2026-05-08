@@ -1,5 +1,4 @@
 mod mysql;
-mod traits;
 
 pub use mysql::MySQLConnection;
-pub use traits::Connection;
+pub use tools_mcp_core::Connection;

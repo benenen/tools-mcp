@@ -1,6 +1,6 @@
 use crate::config::{Config, TunnelConfig};
 use crate::connection::{Connection, MySQLConnection};
-use crate::error::{Error, Result};
+use tools_mcp_core::{Error, Result};
 use crate::executor::MySQLExecutor;
 use crate::output::ExecutionResult;
 use crate::tunnel::{DirectTunnel, SshTunnel, Tunnel};

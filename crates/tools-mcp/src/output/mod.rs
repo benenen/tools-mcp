@@ -1,5 +1,4 @@
 mod cli;
-mod types;
 
 pub use cli::CliFormatter;
-pub use types::ExecutionResult;
+pub use tools_mcp_core::ExecutionResult;

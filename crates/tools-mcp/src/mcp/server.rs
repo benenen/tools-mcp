@@ -53,15 +53,15 @@ impl ServerHandler for ToolsMcpServer {
 }
 
 /// Run the MCP server over stdio. Blocks until the client disconnects.
-pub async fn serve_stdio() -> crate::error::Result<()> {
+pub async fn serve_stdio() -> crate::Result<()> {
     let server = ToolsMcpServer::new();
     let service = server
         .serve(rmcp::transport::stdio())
         .await
-        .map_err(|e| crate::error::Error::Connection(format!("MCP server start failed: {e}")))?;
+        .map_err(|e| crate::Error::Connection(format!("MCP server start failed: {e}")))?;
     service
         .waiting()
         .await
-        .map_err(|e| crate::error::Error::Connection(format!("MCP server error: {e}")))?;
+        .map_err(|e| crate::Error::Connection(format!("MCP server error: {e}")))?;
     Ok(())
 }

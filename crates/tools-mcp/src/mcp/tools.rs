@@ -1,6 +1,6 @@
 use crate::config::{Config, ConfigLoader, ServiceType, TunnelConfig};
 use crate::core::mysql;
-use crate::error::{Error, Result};
+use tools_mcp_core::{Error, Result};
 use crate::output::ExecutionResult;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

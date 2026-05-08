@@ -1,7 +1,7 @@
 use crate::connection::MySQLConnection;
-use crate::error::Result;
 use crate::output::ExecutionResult;
 use mysql_async::{Row, Value, prelude::*};
+use tools_mcp_core::{Error, Result};
 
 pub struct MySQLExecutor;
 
@@ -9,7 +9,10 @@ impl MySQLExecutor {
     pub async fn execute(conn: &mut MySQLConnection, query: &str) -> Result<ExecutionResult> {
         let mysql_conn = conn.get_conn().await?;
 
-        let result: Vec<Row> = mysql_conn.query(query).await?;
+        let result: Vec<Row> = mysql_conn
+            .query(query)
+            .await
+            .map_err(|e: mysql_async::Error| Error::Service(format!("MySQL query: {e}")))?;
 
         if result.is_empty() {
             return Ok(ExecutionResult::new(vec![], vec![], 0));

@@ -3320,6 +3320,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "toml",
+ "tools-mcp-core",
 ]
 
 [[package]]

@@ -1,5 +1,4 @@
-use crate::connection::traits::Connection;
-use crate::error::{Error, Result};
+use tools_mcp_core::{Connection, Error, Result};
 use crate::tunnel::Tunnel;
 use async_trait::async_trait;
 use mysql_async::{Conn, OptsBuilder, Pool};
@@ -59,7 +58,10 @@ impl Connection for MySQLConnection {
         }
 
         let pool = Pool::new(builder);
-        let conn = pool.get_conn().await?;
+        let conn = pool
+            .get_conn()
+            .await
+            .map_err(|e: mysql_async::Error| Error::Service(format!("MySQL: {e}")))?;
 
         self.pool = Some(pool);
         self.conn = Some(conn);
@@ -71,7 +73,9 @@ impl Connection for MySQLConnection {
             drop(conn);
         }
         if let Some(pool) = self.pool.take() {
-            pool.disconnect().await?;
+            pool.disconnect()
+                .await
+                .map_err(|e: mysql_async::Error| Error::Service(format!("MySQL: {e}")))?;
         }
         self.tunnel.close().await?;
         Ok(())

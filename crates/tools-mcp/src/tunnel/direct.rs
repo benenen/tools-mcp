@@ -1,6 +1,5 @@
-use crate::error::Result;
-use crate::tunnel::traits::{Tunnel, TunnelEndpoint};
 use async_trait::async_trait;
+use tools_mcp_core::{Result, Tunnel, TunnelEndpoint};
 
 pub struct DirectTunnel {
     target_host: String,

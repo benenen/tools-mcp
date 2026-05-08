@@ -1,6 +1,5 @@
-use crate::error::{Error, Result};
-use crate::tunnel::traits::{Tunnel, TunnelEndpoint};
 use async_trait::async_trait;
+use tools_mcp_core::{Error, Result, Tunnel, TunnelEndpoint};
 use russh::client;
 use russh::keys::key::PublicKey;
 use std::sync::Arc;
