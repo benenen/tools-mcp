@@ -58,10 +58,7 @@ pub async fn execute(
         client::connect_stream(cfg, stream, target_handler)
             .await
             .map_err(|e| {
-                Error::Connection(format!(
-                    "SSH connect to {} (chained) failed: {e}",
-                    req.host
-                ))
+                Error::Connection(format!("SSH connect to {} (chained) failed: {e}", req.host))
             })?
     } else {
         client::connect(cfg, (req.host.as_str(), req.port), target_handler)

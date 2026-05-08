@@ -11,26 +11,29 @@ Unified tool for SSH, MySQL, and Redis connections with MCP (Model Context Proto
 
 ## Status
 
-This is the Phase 6 release. Currently implemented:
+This is the Phase 7 release. Currently implemented:
 
 - MySQL CLI mode (`tools-mcp mysql "..."`) and `mysql_exec` MCP tool.
 - Redis CLI mode (`tools-mcp redis "..."`) and `redis_exec` MCP tool.
-- **HTTP CLI mode** (`tools-mcp http GET https://...`) and `http_exec` MCP tool.
+- HTTP CLI mode (`tools-mcp http GET https://...`) and `http_exec` MCP tool.
+- **SSH-direct CLI mode** (`tools-mcp ssh "..."`) and `ssh_exec` MCP tool —
+  run a shell command on a target SSH server, optionally through SSH jump hosts.
 - Configuration via YAML file (`--config=PATH`) or TOML profile (`--profile=NAME`)
-  for MySQL and Redis. (HTTP profile/YAML is Phase 7+.)
+  for MySQL and Redis. (HTTP and SSH-direct profile/YAML is Phase 8+.)
 - Direct connection (`--tunnel=direct` or no `--tunnel`).
 - SSH tunnel (`--tunnel=ssh`) with single- or multi-hop jump (`--ssh-jump=h1[,h2,...]`),
   password or key auth. Host keys accepted with a fingerprint warning.
-  Works for HTTP too — internal HTTPS services accessible via bastion.
+  Works for HTTP and SSH-direct too.
 - MCP server mode (`tools-mcp` with no subcommand) over stdio.
 
 Not yet implemented:
-- SSH direct connection (`tools-mcp ssh ...`)
 - SSH key passphrases, per-hop auth overrides, strict known_hosts verification
-- HTTP profile/YAML config (base_url, default headers, default bearer)
-- HTTP/SSE MCP transport (the SERVER's transport, not the http tool)
+- SSH PTY allocation (interactive commands like `top` won't work)
+- HTTP / SSH-direct profile/YAML config
+- HTTP/SSE MCP transport (the SERVER's transport)
 - Redis cluster routing, pub/sub, transactions, scripting (EVAL)
 - Per-Value typed mapping for RESP3 `Map` / `Set` / `Push`
+- SCP/SFTP file transfer
 
 ## Installation
 
@@ -112,6 +115,26 @@ tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=se
 tools-mcp http GET https://10.0.0.5/api --insecure -i
 ```
 
+### SSH (remote command execution)
+
+```bash
+# Direct connection
+tools-mcp ssh "uname -a" --host=server.com --user=admin --key-path=~/.ssh/id_rsa
+
+# With password
+tools-mcp ssh "df -h" --host=10.0.0.5 --user=root --password=secret
+
+# Through an SSH jump (jump creds are SEPARATE from target creds)
+tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=jumper --ssh-password=jpwd \
+  ssh "systemctl status nginx" --host=internal-server --user=admin --key-path=~/.ssh/target_key
+
+# Show structured output (exit_code/stdout/stderr table)
+tools-mcp ssh "false" --host=h --user=u --key-path=~/.ssh/k -i
+```
+
+By default `tools-mcp`'s exit code mirrors the remote command's exit code,
+so shell-script usage works (e.g. `if tools-mcp ssh "test -f /etc/passwd" ...`).
+
 ### MCP Server
 
 Run `tools-mcp` with no subcommand to start an MCP server over stdio:
@@ -165,16 +188,19 @@ What the plugin provides:
   - `mysql_exec` — run a MySQL query.
   - `redis_exec` — run a Redis command.
   - `http_exec` — send an HTTP request.
+  - `ssh_exec` — run a shell command on a remote SSH server.
 - **Skills** that guide the assistant:
   - `tools-mcp-using` — parameter shape, three-layer config priority, multi-hop syntax (mysql + redis).
   - `mysql-debugging` — diagnostic queries for common MySQL errors, locks, slow queries.
   - `redis-using` — Redis command shape, output mapping, destructive-command list.
   - `http-using` — HTTP tool input, tunnel routing for internal HTTPS, output mapping.
+  - `ssh-using` — SSH-direct target/jump cred separation, output mapping, PTY limits.
   - `ssh-bastion-checklist` — narrows down SSH-tunnel failures.
 - **Slash commands**:
   - `/mysql <SQL>` — quick MySQL query.
   - `/redis <COMMAND>` — quick Redis command.
   - `/http <METHOD> <URL>` — quick HTTP request.
+  - `/ssh <COMMAND>` — quick remote shell command.
 
 ### Configuration
 

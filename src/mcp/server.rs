@@ -86,7 +86,9 @@ impl ToolsMcpServer {
     }
 
     /// Run a shell command on an SSH target, optionally through SSH jumps.
-    #[tool(description = "Execute a shell command on a remote SSH server. Returns exit_code, stdout, and stderr. Optionally route through one or more SSH jump hosts; jump credentials and target credentials are independent.")]
+    #[tool(
+        description = "Execute a shell command on a remote SSH server. Returns exit_code, stdout, and stderr. Optionally route through one or more SSH jump hosts; jump credentials and target credentials are independent."
+    )]
     async fn ssh_exec(
         &self,
         Parameters(params): Parameters<crate::mcp::tools::SshExecParams>,
