@@ -30,9 +30,16 @@ Not yet implemented:
 
 ## Installation
 
+Build a release binary and install it on `PATH`:
+
 ```bash
-cargo build --release
+cargo install --path .
+# or, for an unpublished build:
+cargo build --release && cp target/release/tools-mcp ~/.local/bin/
 ```
+
+`cargo install --path .` puts the binary at `~/.cargo/bin/tools-mcp`, which
+is on `PATH` by default after a normal Rust toolchain install.
 
 ## Usage
 
@@ -82,6 +89,29 @@ Example MCP configuration entry (e.g. for Claude Desktop):
   }
 }
 ```
+
+### Use as a Claude Code plugin
+
+This repo ships a `.claude-plugin/plugin.json` + `.mcp.json` so Claude Code
+can load it directly as a plugin (no extra config in `~/.claude/settings.json`).
+
+Prerequisite: `cargo install --path .` so the `tools-mcp` binary is on `PATH`.
+
+Then in Claude Code:
+
+```bash
+/plugin marketplace add /path/to/tools-mcp        # one-time
+/plugin install tools-mcp                          # enable the plugin
+```
+
+Or, for ad-hoc loading without going through a marketplace:
+
+```bash
+claude --plugin-dir /path/to/tools-mcp
+```
+
+The plugin auto-starts the MCP server on first use; the `mysql_exec` tool
+shows up in the tool list available to Claude.
 
 ### Configuration
 

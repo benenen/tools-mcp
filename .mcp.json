@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "tools-mcp": {
+      "command": "tools-mcp"
+    }
+  }
+}
