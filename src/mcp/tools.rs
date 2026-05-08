@@ -202,6 +202,148 @@ pub async fn mysql_exec(params: MysqlExecParams) -> Result<ExecutionResult> {
     mysql::execute(config, &query).await
 }
 
+/// JSON parameters for the `redis_exec` MCP tool.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct RedisExecParams {
+    /// Redis command to execute (e.g. "GET key" or "HSET h f1 v1").
+    pub command: String,
+
+    /// Redis host (overrides profile / yaml).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+
+    /// Redis port (default 6379).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+
+    /// Redis password.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+
+    /// Redis database number (default 0).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub db: Option<u32>,
+
+    /// Profile name from ~/.config/tools-mcp/config.toml.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+
+    /// Path to a YAML config file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<PathBuf>,
+
+    /// Tunnel kind. "direct" (default) or "ssh".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tunnel: Option<TunnelKind>,
+
+    /// SSH jump host(s).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_jump: Option<SshJumpInput>,
+
+    /// SSH jump user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_user: Option<String>,
+
+    /// SSH jump password.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_password: Option<String>,
+
+    /// SSH key path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_key_path: Option<String>,
+
+    /// SSH jump port (default 22).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_port: Option<u16>,
+}
+
+fn redis_params_to_config(p: &RedisExecParams) -> Result<Config> {
+    let mut configs: Vec<Config> = Vec::new();
+
+    if let Some(profile_name) = &p.profile {
+        let toml_config = ConfigLoader::load_default_toml()?.ok_or_else(|| {
+            Error::Config(format!(
+                "profile '{profile_name}' requested but no ~/.config/tools-mcp/config.toml found"
+            ))
+        })?;
+        let profile_cfg = toml_config.profiles.get(profile_name).ok_or_else(|| {
+            Error::Config(format!("profile '{profile_name}' not found in config.toml"))
+        })?;
+        configs.push(profile_to_config(profile_cfg));
+    }
+
+    if let Some(path) = p.config.as_deref() {
+        configs.push(ConfigLoader::load_yaml_file(path)?);
+    }
+
+    let tunnel_config = build_tunnel_config_for_redis(p)?;
+    configs.push(Config {
+        service_type: Some(ServiceType::Redis),
+        host: p.host.clone(),
+        port: p.port,
+        user: None,
+        password: p.password.clone(),
+        database: None,
+        db: p.db,
+        key_path: None,
+        tunnel: tunnel_config,
+    });
+
+    Ok(crate::config::ConfigMerger::merge_multiple(configs))
+}
+
+/// Same shape as the MySQL build_tunnel_config but reads from RedisExecParams.
+/// Refactor opportunity: extract a shared helper taking the SSH fields by reference.
+fn build_tunnel_config_for_redis(p: &RedisExecParams) -> Result<Option<TunnelConfig>> {
+    let Some(kind) = &p.tunnel else {
+        return Ok(None);
+    };
+    match kind {
+        TunnelKind::Direct => {
+            let stray = p.ssh_jump.is_some()
+                || p.ssh_user.is_some()
+                || p.ssh_password.is_some()
+                || p.ssh_key_path.is_some()
+                || p.ssh_port.is_some();
+            if stray {
+                return Err(Error::Config(
+                    "ssh_* fields are only valid with tunnel = \"ssh\"".to_string(),
+                ));
+            }
+            Ok(Some(TunnelConfig::Direct))
+        }
+        TunnelKind::Ssh => {
+            let jumps = p
+                .ssh_jump
+                .clone()
+                .map(SshJumpInput::into_jumps)
+                .ok_or_else(|| {
+                    Error::Config("ssh_jump is required when tunnel = \"ssh\"".to_string())
+                })?;
+            if jumps.is_empty() {
+                return Err(Error::Config("ssh_jump must not be empty".to_string()));
+            }
+            let ssh_user = p.ssh_user.clone().ok_or_else(|| {
+                Error::Config("ssh_user is required when tunnel = \"ssh\"".to_string())
+            })?;
+            Ok(Some(TunnelConfig::Ssh {
+                ssh_jumps: jumps,
+                ssh_user,
+                ssh_password: p.ssh_password.clone(),
+                ssh_key_path: p.ssh_key_path.clone(),
+                ssh_port: p.ssh_port.unwrap_or(22),
+            }))
+        }
+    }
+}
+
+/// Public entry point for the redis_exec tool.
+pub async fn redis_exec(params: RedisExecParams) -> Result<ExecutionResult> {
+    let command = params.command.clone();
+    let config = redis_params_to_config(&params)?;
+    crate::core::redis::execute(config, &command).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,5 +435,30 @@ mod tests {
         };
         let err = params_to_config(&p).unwrap_err();
         assert!(matches!(err, Error::Config(msg) if msg.contains("ssh_jump")));
+    }
+
+    #[test]
+    fn test_redis_explicit_fields_become_config() {
+        let p = RedisExecParams {
+            command: "GET key".to_string(),
+            host: Some("redis.internal".into()),
+            port: Some(6380),
+            password: Some("pwd".into()),
+            db: Some(2),
+            profile: None,
+            config: None,
+            tunnel: None,
+            ssh_jump: None,
+            ssh_user: None,
+            ssh_password: None,
+            ssh_key_path: None,
+            ssh_port: None,
+        };
+        let cfg = redis_params_to_config(&p).unwrap();
+        assert_eq!(cfg.host.as_deref(), Some("redis.internal"));
+        assert_eq!(cfg.port, Some(6380));
+        assert_eq!(cfg.password.as_deref(), Some("pwd"));
+        assert_eq!(cfg.db, Some(2));
+        assert_eq!(cfg.service_type, Some(ServiceType::Redis));
     }
 }

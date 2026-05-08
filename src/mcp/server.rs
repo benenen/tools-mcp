@@ -38,6 +38,27 @@ impl ToolsMcpServer {
             Err(e) => Ok(CallToolResult::error(vec![Content::text(e.to_string())])),
         }
     }
+
+    /// Execute a Redis command, optionally through an SSH tunnel.
+    #[tool(description = "Execute a Redis command, optionally through an SSH jump host. Same connection options as the `tools-mcp redis` CLI subcommand.")]
+    async fn redis_exec(
+        &self,
+        Parameters(params): Parameters<crate::mcp::tools::RedisExecParams>,
+    ) -> std::result::Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
+        match crate::mcp::tools::redis_exec(params).await {
+            Ok(result) => {
+                let json = serde_json::to_string_pretty(&result).map_err(|e| {
+                    rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
+                })?;
+                Ok(rmcp::model::CallToolResult::success(vec![
+                    rmcp::model::Content::text(json),
+                ]))
+            }
+            Err(e) => Ok(rmcp::model::CallToolResult::error(vec![
+                rmcp::model::Content::text(e.to_string()),
+            ])),
+        }
+    }
 }
 
 #[tool_handler]
