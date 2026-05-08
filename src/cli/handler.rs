@@ -4,7 +4,7 @@ use crate::connection::{Connection, MySQLConnection};
 use crate::error::{Error, Result};
 use crate::executor::MySQLExecutor;
 use crate::output::CliFormatter;
-use crate::tunnel::{DirectTunnel, Tunnel};
+use crate::tunnel::{DirectTunnel, SshTunnel, Tunnel};
 
 pub struct CliHandler;
 
@@ -157,19 +157,34 @@ impl CliHandler {
             .user
             .ok_or_else(|| Error::Config("MySQL user is required".to_string()))?;
 
-        // Phase 1: only DirectTunnel is implemented. Refuse SSH explicitly.
-        if let Some(TunnelConfig::Ssh { .. }) = config.tunnel {
-            return Err(Error::Config(
-                "SSH tunnel is not yet implemented in Phase 1".to_string(),
-            ));
-        }
+        let tunnel: Box<dyn Tunnel> = match config.tunnel {
+            None | Some(TunnelConfig::Direct) => Box::new(DirectTunnel::new(host, port)),
+            Some(TunnelConfig::Ssh {
+                ssh_jumps,
+                ssh_user,
+                ssh_password,
+                ssh_key_path,
+                ssh_port,
+            }) => {
+                let key_path = ssh_key_path.map(std::path::PathBuf::from);
+                Box::new(SshTunnel::new(
+                    ssh_jumps,
+                    ssh_user,
+                    ssh_password,
+                    key_path,
+                    ssh_port,
+                    host,
+                    port,
+                )?)
+            }
+        };
 
-        let tunnel: Box<dyn Tunnel> = Box::new(DirectTunnel::new(host, port));
         let mut conn = MySQLConnection::new(tunnel, user, config.password, config.database);
-        let result = MySQLExecutor::execute(&mut conn, query).await?;
-        let output = CliFormatter::format(&result);
-        println!("{}", output);
-        conn.disconnect().await?;
+        let exec_result = MySQLExecutor::execute(&mut conn, query).await;
+        // Always tear down the tunnel + pool, even on query error.
+        let _ = conn.disconnect().await;
+        let output = CliFormatter::format(&exec_result?);
+        println!("{output}");
         Ok(())
     }
 }
