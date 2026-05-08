@@ -1,9 +1,8 @@
 use async_trait::async_trait;
-use russh::client;
-use russh::keys::key::PublicKey;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tools_mcp_core::{Error, Result, Tunnel, TunnelEndpoint};
+use tools_mcp_ssh::session::{AcceptAnyHostKey, build_session_chain};
 
 /// SSH-jump tunnel. Establishes a chain of SSH sessions through
 /// `ssh_jumps` (in client→target order) and exposes a local TCP
@@ -28,85 +27,7 @@ struct SshTunnelState {
     listener_task: tokio::task::JoinHandle<()>,
     /// SSH session handles, ordered client-to-target. Kept alive so the
     /// channels in the listener task don't drop their parents.
-    _sessions: Vec<Arc<Mutex<client::Handle<AcceptAnyHostKey>>>>,
-}
-
-/// russh client handler that accepts any server host key but logs a
-/// fingerprint warning to stderr. Phase 2 simplification — Phase 3 will
-/// add a strict-checking variant backed by ~/.ssh/known_hosts.
-#[allow(dead_code)]
-struct AcceptAnyHostKey {
-    label: String,
-}
-
-#[async_trait]
-impl client::Handler for AcceptAnyHostKey {
-    type Error = russh::Error;
-
-    async fn check_server_key(
-        &mut self,
-        server_public_key: &PublicKey,
-    ) -> std::result::Result<bool, Self::Error> {
-        let fingerprint = server_public_key.fingerprint();
-        eprintln!(
-            "warning: accepting unverified host key for {}: {}",
-            self.label, fingerprint
-        );
-        Ok(true)
-    }
-}
-
-/// Authenticate `handle` using key path first (if provided), then
-/// password. Returns Err if neither succeeds or neither is supplied.
-///
-/// Note: passphrase-protected keys are not supported yet (Phase 3 can
-/// add `--ssh-key-passphrase`). The `None` passphrase means unencrypted
-/// keys only.
-#[allow(dead_code)]
-async fn authenticate(
-    handle: &mut client::Handle<AcceptAnyHostKey>,
-    user: &str,
-    password: Option<&str>,
-    key_path: Option<&std::path::Path>,
-) -> Result<()> {
-    if let Some(path) = key_path {
-        // load_secret_key returns russh::keys::key::KeyPair in russh-keys 0.46.
-        // None = no passphrase (passphrase-protected keys deferred to Phase 3).
-        let key = russh::keys::load_secret_key(path, None).map_err(|e| {
-            Error::Connection(format!(
-                "failed to load SSH key from '{}': {}",
-                path.display(),
-                e
-            ))
-        })?;
-        // authenticate_publickey takes Arc<key::KeyPair> and returns Result<bool>.
-        let success = handle
-            .authenticate_publickey(user, std::sync::Arc::new(key))
-            .await
-            .map_err(|e| Error::Connection(format!("SSH publickey auth failed: {e}")))?;
-        if success {
-            return Ok(());
-        }
-        // fall through to password if provided
-    }
-
-    if let Some(pw) = password {
-        // authenticate_password returns Result<bool> in russh 0.46.
-        let success = handle
-            .authenticate_password(user, pw)
-            .await
-            .map_err(|e| Error::Connection(format!("SSH password auth failed: {e}")))?;
-        if success {
-            return Ok(());
-        }
-        return Err(Error::Connection(
-            "SSH password authentication rejected".to_string(),
-        ));
-    }
-
-    Err(Error::Connection(
-        "SSH authentication failed: no usable credentials (provide --ssh-key-path or --ssh-password)".to_string(),
-    ))
+    _sessions: Vec<Arc<Mutex<russh::client::Handle<AcceptAnyHostKey>>>>,
 }
 
 impl SshTunnel {
@@ -146,9 +67,15 @@ impl Tunnel for SshTunnel {
             ));
         }
 
-        // Build SSH session chain: open the first session via TCP, then
-        // chain subsequent sessions over direct-tcpip channels.
-        let sessions = self.build_session_chain().await?;
+        // Build SSH session chain via the shared helper in tools-mcp-ssh.
+        let sessions = build_session_chain(
+            &self.ssh_jumps,
+            &self.ssh_user,
+            self.ssh_password.as_deref(),
+            self.ssh_key_path.as_deref(),
+            self.ssh_port,
+        )
+        .await?;
         let final_handle = Arc::clone(sessions.last().expect("chain has at least one session"));
 
         // Bind local listener and capture port BEFORE spawning so we can
@@ -217,84 +144,9 @@ impl Tunnel for SshTunnel {
     }
 }
 
-impl SshTunnel {
-    /// Open SSH session(s), one per jump host, chained via direct-tcpip.
-    /// Returns the chain in client→target order; the last entry is the
-    /// session that should open the final direct-tcpip channel to target.
-    async fn build_session_chain(
-        &self,
-    ) -> Result<Vec<Arc<Mutex<client::Handle<AcceptAnyHostKey>>>>> {
-        let cfg = std::sync::Arc::new(client::Config::default());
-        let mut sessions: Vec<Arc<Mutex<client::Handle<AcceptAnyHostKey>>>> =
-            Vec::with_capacity(self.ssh_jumps.len());
-
-        // Hop 0: TCP-connect directly.
-        let first_jump = &self.ssh_jumps[0];
-        let handler = AcceptAnyHostKey {
-            label: first_jump.clone(),
-        };
-        let mut session =
-            client::connect(cfg.clone(), (first_jump.as_str(), self.ssh_port), handler)
-                .await
-                .map_err(|e| {
-                    Error::Connection(format!("SSH connect to {first_jump} failed: {e}"))
-                })?;
-        authenticate(
-            &mut session,
-            &self.ssh_user,
-            self.ssh_password.as_deref(),
-            self.ssh_key_path.as_deref(),
-        )
-        .await?;
-        sessions.push(Arc::new(Mutex::new(session)));
-
-        // Hop 1..N: each over a direct-tcpip channel of the prior session.
-        for next_jump in self.ssh_jumps.iter().skip(1) {
-            let prev = sessions.last().expect("at least one session");
-            let channel = prev
-                .lock()
-                .await
-                .channel_open_direct_tcpip(
-                    next_jump.clone(),
-                    self.ssh_port as u32,
-                    "127.0.0.1",
-                    0u32,
-                )
-                .await
-                .map_err(|e| {
-                    Error::Connection(format!(
-                        "open direct-tcpip to {next_jump}:{} via prior hop failed: {e}",
-                        self.ssh_port
-                    ))
-                })?;
-            // ChannelStream is not Unpin; box-pin so connect_stream's bound holds.
-            let stream = Box::pin(channel.into_stream());
-
-            let handler = AcceptAnyHostKey {
-                label: next_jump.clone(),
-            };
-            let mut session = client::connect_stream(cfg.clone(), stream, handler)
-                .await
-                .map_err(|e| {
-                    Error::Connection(format!("SSH connect to {next_jump} (chained) failed: {e}"))
-                })?;
-            authenticate(
-                &mut session,
-                &self.ssh_user,
-                self.ssh_password.as_deref(),
-                self.ssh_key_path.as_deref(),
-            )
-            .await?;
-            sessions.push(Arc::new(Mutex::new(session)));
-        }
-
-        Ok(sessions)
-    }
-}
-
 /// Bridge `local_stream` ⟷ direct-tcpip channel from `session` to `target_host:target_port`.
 async fn forward_one(
-    session: Arc<Mutex<client::Handle<AcceptAnyHostKey>>>,
+    session: Arc<Mutex<russh::client::Handle<AcceptAnyHostKey>>>,
     target_host: String,
     target_port: u16,
     mut local_stream: tokio::net::TcpStream,
