@@ -18,6 +18,31 @@ pub struct MysqlRequest {
     pub query: String,
 }
 
+impl MysqlRequest {
+    /// Build a typed MysqlRequest by validating + draining a Config.
+    ///
+    /// `config.host` and `config.user` are required (returns
+    /// `Error::Config` if missing). `config.port` defaults to 3306.
+    pub fn from_config(config: crate::config::Config, query: String) -> Result<Self> {
+        let host = config
+            .host
+            .ok_or_else(|| tools_mcp_core::Error::Config("MySQL host is required".to_string()))?;
+        let port = config.port.unwrap_or(3306);
+        let user = config
+            .user
+            .ok_or_else(|| tools_mcp_core::Error::Config("MySQL user is required".to_string()))?;
+
+        Ok(MysqlRequest {
+            host,
+            port,
+            user,
+            password: config.password,
+            database: config.database,
+            query,
+        })
+    }
+}
+
 pub struct MysqlOrchestrator;
 
 #[async_trait]
@@ -59,5 +84,62 @@ impl Service for MysqlOrchestrator {
         };
 
         mysql_execute(tunnel, params, &req.query).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use tools_mcp_core::Error;
+
+    #[test]
+    fn test_from_config_errors_on_missing_host() {
+        let config = Config {
+            user: Some("root".to_string()),
+            ..Default::default()
+        };
+        let err = MysqlRequest::from_config(config, "SELECT 1".to_string()).unwrap_err();
+        assert!(matches!(err, Error::Config(msg) if msg.contains("host")));
+    }
+
+    #[test]
+    fn test_from_config_errors_on_missing_user() {
+        let config = Config {
+            host: Some("localhost".to_string()),
+            ..Default::default()
+        };
+        let err = MysqlRequest::from_config(config, "SELECT 1".to_string()).unwrap_err();
+        assert!(matches!(err, Error::Config(msg) if msg.contains("user")));
+    }
+
+    #[test]
+    fn test_from_config_succeeds_with_required_fields() {
+        let config = Config {
+            host: Some("localhost".to_string()),
+            user: Some("root".to_string()),
+            password: Some("pwd".to_string()),
+            database: Some("mydb".to_string()),
+            port: Some(3307),
+            ..Default::default()
+        };
+        let req = MysqlRequest::from_config(config, "SELECT 1".to_string()).unwrap();
+        assert_eq!(req.host, "localhost");
+        assert_eq!(req.port, 3307);
+        assert_eq!(req.user, "root");
+        assert_eq!(req.password.as_deref(), Some("pwd"));
+        assert_eq!(req.database.as_deref(), Some("mydb"));
+        assert_eq!(req.query, "SELECT 1");
+    }
+
+    #[test]
+    fn test_from_config_defaults_port_to_3306() {
+        let config = Config {
+            host: Some("h".to_string()),
+            user: Some("u".to_string()),
+            ..Default::default()
+        };
+        let req = MysqlRequest::from_config(config, "SELECT 1".to_string()).unwrap();
+        assert_eq!(req.port, 3306);
     }
 }
