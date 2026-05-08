@@ -19,7 +19,7 @@ release: ## release 构建（target/release/$(BIN)）
 	$(CARGO) build --release
 
 run: ## 跑 debug binary，用 ARGS 传参（make run ARGS="mysql --help"）
-	$(CARGO) run -p tools-mcp -- $(ARGS)
+	$(CARGO) run -- $(ARGS)
 
 test: ## 跑全部 unit + integration 测试
 	$(CARGO) test
@@ -43,7 +43,7 @@ clean: ## 删除 target/
 	$(CARGO) clean
 
 install: release ## 把 release binary 装到 ~/.cargo/bin
-	$(CARGO) install --path crates/tools-mcp --force
+	$(CARGO) install --path . --force
 
 uninstall: ## 从 ~/.cargo/bin 卸载
 	$(CARGO) uninstall $(BIN)

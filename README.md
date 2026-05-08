@@ -33,19 +33,19 @@ Not yet implemented:
 Build a release binary and install it on `PATH`:
 
 ```bash
-cargo install --path crates/tools-mcp
+cargo install --path .
 # or, for an unpublished build:
 cargo build --release && cp target/release/tools-mcp ~/.local/bin/
 ```
 
-`cargo install --path crates/tools-mcp` puts the binary at
+`cargo install --path .` puts the binary at
 `~/.cargo/bin/tools-mcp`, which is on `PATH` by default after a normal
 Rust toolchain install.
 
-This repo is a Cargo workspace with three crates under `crates/`:
-`tools-mcp` (the binary), `tools-mcp-core` (the trait floor), and
-`tools-mcp-mysql` (the MySQL primitives). `cargo build` / `cargo test`
-from the workspace root build/test all three.
+This repo is a Cargo workspace. The `tools-mcp` binary crate lives at
+the repo root; the two lib crates `tools-mcp-core` (the trait floor)
+and `tools-mcp-mysql` (the MySQL primitives) live under `crates/`.
+`cargo build` / `cargo test` from the root build and test all three.
 
 ## Usage
 
@@ -103,7 +103,7 @@ This repo ships a Claude Code plugin (`.claude-plugin/plugin.json` +
 the `mysql_exec` MCP tool plus three project-specific skills and one
 slash command — all wired up automatically.
 
-Prerequisite: `cargo install --path crates/tools-mcp` so the `tools-mcp` binary is on `PATH`.
+Prerequisite: `cargo install --path .` so the `tools-mcp` binary is on `PATH`.
 
 Then in Claude Code:
 

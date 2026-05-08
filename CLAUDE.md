@@ -25,7 +25,7 @@ Single integration test crate: `cargo test --test config_tests`.
 
 ## Architecture
 
-**Workspace.** The repo is a Cargo workspace with three crates under `crates/`. `tools-mcp-core` is service-agnostic (traits + shared types), `tools-mcp-mysql` is MySQL-specific (mysql_async), and `tools-mcp` is the binary that wires them up plus the CLI/MCP/config presentation. Adding a new service (Redis, SSH-direct) means a new sibling lib crate (`tools-mcp-redis`, …) plus a tunnel-dependent orchestrator in the bin.
+**Workspace.** The repo is a Cargo workspace. The `tools-mcp` binary crate lives at the repo root (`./Cargo.toml` is both the workspace manifest and the bin's `[package]`); the two lib crates `tools-mcp-core` (service-agnostic traits + shared types) and `tools-mcp-mysql` (MySQL-specific, owns `mysql_async`) live under `crates/`. The bin wires them up plus the CLI/MCP/config presentation. Adding a new service (Redis, SSH-direct) means a new sibling lib crate (`crates/tools-mcp-redis`, …) plus a tunnel-dependent orchestrator in the bin.
 
 ### Module map (each module = one responsibility)
 
@@ -33,12 +33,12 @@ Single integration test crate: `cargo test --test config_tests`.
 | --- | --- |
 | `tools-mcp-core` (lib) | `Tunnel` / `Connection` async traits, `TunnelEndpoint`, `Error`/`Result` (with `Service(String)` for wrapped library errors), `ExecutionResult`. Sole external deps: `async-trait` + `serde`. The dependency floor for the workspace. |
 | `tools-mcp-mysql` (lib) | `MySQLConnection` (impl `core::Connection`), `MySQLExecutor`, and the entry `execute(tunnel, params, query) -> ExecutionResult`. Owns the `mysql_async` dep. Service-agnostic about how the tunnel was built. |
-| `tools-mcp` bin: `cli::*` | clap `Cli`, `SshTunnelArgs`, `CliHandler` — CLI mode parse + dispatch. |
-| `tools-mcp` bin: `mcp::*` | rmcp `ServerHandler`, `mysql_exec` tool wiring, params → `Config` conversion. |
-| `tools-mcp` bin: `config::*` | `Config`, `Profile`, `TunnelConfig`, `ConfigLoader`, `ConfigMerger`. Three-layer merge logic. |
-| `tools-mcp` bin: `tunnel::{direct,ssh}` | `DirectTunnel` and `SshTunnel` (russh) — the actual `Tunnel` trait impls. Stay in the bin so `tools-mcp-core` stays russh-free. |
-| `tools-mcp` bin: `core::mysql::execute(Config, &str)` | Orchestrator: validate Config, build the right tunnel, translate to `tools_mcp_mysql::MysqlParams`, call into the lib. CLI handler and MCP tool both delegate here. |
-| `tools-mcp` bin: `output::CliFormatter` | comfy-table renderer for CLI mode. Operates on `tools_mcp_core::ExecutionResult`. |
+| `tools-mcp` bin (root `src/cli/*`) | clap `Cli`, `SshTunnelArgs`, `CliHandler` — CLI mode parse + dispatch. |
+| `tools-mcp` bin (root `src/mcp/*`) | rmcp `ServerHandler`, `mysql_exec` tool wiring, params → `Config` conversion. |
+| `tools-mcp` bin (root `src/config/*`) | `Config`, `Profile`, `TunnelConfig`, `ConfigLoader`, `ConfigMerger`. Three-layer merge logic. |
+| `tools-mcp` bin (root `src/tunnel/{direct,ssh}.rs`) | `DirectTunnel` and `SshTunnel` (russh) — the actual `Tunnel` trait impls. Stay in the bin so `tools-mcp-core` stays russh-free. |
+| `tools-mcp` bin (root `src/core/mysql.rs`) | Orchestrator `execute(Config, &str)`: validate Config, build the right tunnel, translate to `tools_mcp_mysql::MysqlParams`, call into the lib. CLI handler and MCP tool both delegate here. |
+| `tools-mcp` bin (root `src/output/cli.rs`) | `CliFormatter` — comfy-table renderer for CLI mode. Operates on `tools_mcp_core::ExecutionResult`. |
 
 ### Config priority (low → high)
 
