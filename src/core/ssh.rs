@@ -2,8 +2,7 @@
 //! translate to tools_mcp_ssh's request shape, dispatch into the lib.
 //! CLI handler and MCP `ssh_exec` tool both delegate here.
 
-use crate::config::TunnelConfig;
-use tools_mcp_core::{Error, ExecutionResult, Result};
+use tools_mcp_core::{Error, ExecutionResult, Result, TunnelConfig};
 use tools_mcp_ssh::{SshExecRequest, SshJumpsConfig, execute as ssh_execute};
 
 pub async fn execute(

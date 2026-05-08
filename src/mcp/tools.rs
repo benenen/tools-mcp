@@ -1,10 +1,10 @@
-use crate::config::{Config, ConfigLoader, ServiceType, TunnelConfig};
 use crate::core::mysql;
 use crate::output::ExecutionResult;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tools_mcp_core::{Error, Result};
+use tools_mcp_core::{Error, Result, TunnelConfig};
+use tools_mcp_orchestrator::config::{Config, ConfigLoader, ServiceType};
 
 /// JSON parameters for the `mysql_exec` MCP tool. Mirrors the CLI's
 /// `mysql` subcommand args plus the global tunnel/config flags, so an
@@ -134,10 +134,10 @@ fn params_to_config(p: &MysqlExecParams) -> Result<Config> {
         tunnel: tunnel_config,
     });
 
-    Ok(crate::config::ConfigMerger::merge_multiple(configs))
+    Ok(tools_mcp_orchestrator::config::ConfigMerger::merge_multiple(configs))
 }
 
-fn profile_to_config(profile: &crate::config::Profile) -> Config {
+fn profile_to_config(profile: &tools_mcp_orchestrator::config::Profile) -> Config {
     Config {
         service_type: Some(profile.service_type.clone()),
         host: profile.host.clone(),
@@ -289,7 +289,7 @@ fn redis_params_to_config(p: &RedisExecParams) -> Result<Config> {
         tunnel: tunnel_config,
     });
 
-    Ok(crate::config::ConfigMerger::merge_multiple(configs))
+    Ok(tools_mcp_orchestrator::config::ConfigMerger::merge_multiple(configs))
 }
 
 /// Same shape as the MySQL build_tunnel_config but reads from RedisExecParams.

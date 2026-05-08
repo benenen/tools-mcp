@@ -4,6 +4,7 @@ members = [
     "crates/tools-mcp-core",
     "crates/tools-mcp-http",
     "crates/tools-mcp-mysql",
+    "crates/tools-mcp-orchestrator",
     "crates/tools-mcp-redis",
     "crates/tools-mcp-ssh",
 ]
@@ -36,6 +37,7 @@ tokio = { version = "1.40", features = ["full"] }
 tools-mcp-core = { path = "crates/tools-mcp-core" }
 tools-mcp-http = { path = "crates/tools-mcp-http" }
 tools-mcp-mysql = { path = "crates/tools-mcp-mysql" }
+tools-mcp-orchestrator = { path = "crates/tools-mcp-orchestrator" }
 tools-mcp-redis = { path = "crates/tools-mcp-redis" }
 tools-mcp-ssh = { path = "crates/tools-mcp-ssh" }
 toml = "0.8"

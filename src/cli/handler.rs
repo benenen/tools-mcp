@@ -1,7 +1,7 @@
 use crate::cli::{Cli, Commands, TunnelKind};
-use crate::config::{Config, ConfigLoader, ConfigMerger, ServiceType, TunnelConfig};
 use crate::output::CliFormatter;
-use tools_mcp_core::{Error, Result};
+use tools_mcp_core::{Error, Result, TunnelConfig};
+use tools_mcp_orchestrator::config::{Config, ConfigLoader, ConfigMerger, ServiceType};
 
 pub struct CliHandler;
 
@@ -196,7 +196,7 @@ impl CliHandler {
         }
     }
 
-    fn profile_to_config(profile: &crate::config::Profile) -> Config {
+    fn profile_to_config(profile: &tools_mcp_orchestrator::config::Profile) -> Config {
         Config {
             service_type: Some(profile.service_type.clone()),
             host: profile.host.clone(),
