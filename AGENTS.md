@@ -6,7 +6,7 @@ This file provides guidance to AI coding agents (Cursor, Copilot, Codex, etc.) w
 
 ## Project Overview
 
-`tools-mcp` is a Rust CLI / future MCP server for SSH, MySQL, and Redis. **Phase 1 (current) implements only MySQL CLI mode** with config support; SSH tunnel, Redis, SSH direct, and MCP server mode are explicit phase boundaries (see below). The design spec lives at `docs/superpowers/specs/2026-05-07-tools-mcp-design.md` and the Phase 1 plan at `docs/superpowers/plans/2026-05-07-tools-mcp-phase1.md`.
+`tools-mcp` is a Rust CLI / future MCP server for SSH, MySQL, and Redis. **Phase 2 (current) implements MySQL CLI mode with SSH tunnel support**; Redis, SSH direct, and MCP server mode are explicit phase boundaries (see below). The design spec lives at `docs/superpowers/specs/2026-05-07-tools-mcp-design.md` and the Phase 1 plan at `docs/superpowers/plans/2026-05-07-tools-mcp-phase1.md`.
 
 ## Common Commands
 
@@ -35,7 +35,7 @@ Single integration test crate: `cargo test --test config_tests`.
 | `config::merger` | `ConfigMerger::merge_multiple(Vec<Config>)` folds with `Option::or` per field — later configs override earlier |
 | `cli::args` | clap `Cli`; SSH-specific flags live in `SshTunnelArgs` flattened via `#[command(flatten)]`; `--tunnel direct\|ssh` is a `ValueEnum` |
 | `cli::handler` | three-layer config merge in `build_config`; `cli_to_tunnel_config` validates SSH constraints |
-| `tunnel::{traits,direct}` | async `Tunnel` trait (`establish/close/is_active`); `DirectTunnel` only — SSH is Phase 2 |
+| `tunnel::{traits,direct,ssh}` | async `Tunnel` trait; `DirectTunnel` (no tunnel) and `SshTunnel` (russh-based, single/multi-hop, accept-any host key) |
 | `connection::{traits,mysql}` | async `Connection` trait; `MySQLConnection` takes `Box<dyn Tunnel>` and opens a `mysql_async::Pool` from `tunnel.establish()`'s endpoint |
 | `executor::mysql` | `MySQLExecutor::execute(&mut MySQLConnection, &str)` — query + Value→String |
 | `output::{types,cli}` | `ExecutionResult { columns, rows, affected_rows }`; `CliFormatter` renders a `comfy-table` UTF-8 box |
@@ -48,10 +48,10 @@ Single integration test crate: `cargo test --test config_tests`.
 
 Each layer is a `Config`; `ConfigMerger::merge_multiple` folds them so later layers win per-field.
 
-### Phase boundaries (where to gate features that aren't Phase 1)
+### Phase boundaries (where to gate features that aren't yet implemented)
 
-- **SSH tunnel**: parses fine into `TunnelConfig::Ssh` but is rejected at runtime in `cli/handler.rs::execute_mysql` with `Error::Config("SSH tunnel is not yet implemented in Phase 1")`. When Phase 2 lands, replace that guard with the real `SshTunnel` construction.
-- **MCP server mode**: triggered when no subcommand is given; `main.rs` prints a placeholder and exits 1.
+- **SSH tunnel**: implemented in Phase 2 via `tunnel::SshTunnel` (russh-based). Single- and multi-hop jumps via comma-separated `--ssh-jump`; password or key auth; host keys accepted with stderr fingerprint warning. Strict known_hosts verification, key passphrases, and per-hop auth are Phase 3.
+- **MCP server mode**: triggered when no subcommand is given; `main.rs` prints a placeholder and exits 1. (Unchanged from Phase 1.)
 
 ## Conventions worth knowing
 

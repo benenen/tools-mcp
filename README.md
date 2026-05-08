@@ -11,17 +11,20 @@ Unified tool for SSH, MySQL, and Redis connections with MCP (Model Context Proto
 
 ## Status
 
-This is the Phase 1 release. Currently implemented:
+This is the Phase 2 release. Currently implemented:
 
 - MySQL CLI mode (`tools-mcp mysql "..."`)
 - Configuration via YAML file (`--config=PATH`) or TOML profile (`--profile=NAME`)
-- Direct connection only (`--tunnel=direct` or no `--tunnel` flag)
+- Direct connection (`--tunnel=direct` or no `--tunnel` flag)
+- SSH tunnel (`--tunnel=ssh`) with single- or multi-hop jump (`--ssh-jump=h1[,h2,...]`),
+  password or key auth (`--ssh-password` / `--ssh-key-path`).
+  Host keys are accepted with a fingerprint warning (Phase 3 will add strict checking).
 
 Not yet implemented:
-- SSH tunnel mode (`--tunnel=ssh ...` will return an error in Phase 1)
 - Redis support
-- SSH direct connection
+- SSH direct connection (`tools-mcp ssh ...`)
 - MCP server mode (running without a subcommand prints a placeholder)
+- SSH key passphrases, per-hop auth overrides, strict known_hosts verification
 
 ## Installation
 
@@ -42,6 +45,15 @@ tools-mcp --config=mysql.yaml mysql "SELECT * FROM users"
 
 # Using TOML profile
 tools-mcp mysql "SELECT * FROM users" --profile=prod
+
+# Through a single SSH jump
+tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=secret \
+  mysql --host=mysql.internal --user=root --password=dbpass "SELECT 1"
+
+# Through two SSH jumps (comma-separated; all share --ssh-user/--ssh-password)
+tools-mcp --tunnel=ssh --ssh-jump=bastion1.com,bastion2.com --ssh-user=admin \
+  --ssh-key-path=~/.ssh/jump_key \
+  mysql --host=mysql.internal --user=root --password=dbpass "SELECT 1"
 ```
 
 ### Configuration

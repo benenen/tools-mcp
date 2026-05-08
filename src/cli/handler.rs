@@ -40,6 +40,7 @@ impl CliHandler {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn build_config(
         cli: &Cli,
         service_type: ServiceType,

@@ -22,7 +22,6 @@ pub struct SshTunnel {
 }
 
 struct SshTunnelState {
-    local_port: u16,
     /// Drop signals all background tasks (listener + each forwarder) to stop.
     shutdown: tokio::sync::watch::Sender<bool>,
     /// JoinHandle for the listener-accept loop. Dropped in close() after
@@ -196,7 +195,6 @@ impl Tunnel for SshTunnel {
         });
 
         self.state = Some(SshTunnelState {
-            local_port,
             shutdown: shutdown_tx,
             listener_task,
             _sessions: sessions,
