@@ -3,8 +3,8 @@ use crate::output::CliFormatter;
 use tools_mcp_core::{Error, Result, Service, TunnelConfig};
 use tools_mcp_orchestrator::config::{Config, ConfigLoader, ConfigMerger, ServiceType};
 use tools_mcp_orchestrator::{
-    HttpOrchestrator, MysqlOrchestrator, MysqlRequest, RedisOrchestrator, RedisRequest,
-    SshDirectOrchestrator,
+    HttpAuth, HttpOrchestrator, HttpRequestSpec, MysqlOrchestrator, MysqlRequest,
+    RedisOrchestrator, RedisRequest, SshDirectOrchestrator, SshExecRequest,
 };
 
 pub struct CliHandler;
@@ -286,7 +286,7 @@ impl CliHandler {
         key_path: Option<std::path::PathBuf>,
         include_headers: bool,
     ) -> Result<()> {
-        let req = tools_mcp_ssh::SshExecRequest {
+        let req = SshExecRequest {
             host,
             port,
             user,
@@ -374,21 +374,21 @@ impl CliHandler {
 
         // Auth
         let auth = match (bearer, basic) {
-            (Some(token), None) => tools_mcp_http::HttpAuth::Bearer(token),
+            (Some(token), None) => HttpAuth::Bearer(token),
             (None, Some(creds)) => {
                 let (user, password) = creds
                     .split_once(':')
                     .ok_or_else(|| Error::Config("--basic must be 'user:password'".to_string()))?;
-                tools_mcp_http::HttpAuth::Basic {
+                HttpAuth::Basic {
                     user: user.to_string(),
                     password: password.to_string(),
                 }
             }
-            (None, None) => tools_mcp_http::HttpAuth::None,
+            (None, None) => HttpAuth::None,
             (Some(_), Some(_)) => unreachable!("clap conflicts_with prevents this"),
         };
 
-        let req = tools_mcp_http::HttpRequestSpec {
+        let req = HttpRequestSpec {
             method,
             url,
             headers: header_pairs,

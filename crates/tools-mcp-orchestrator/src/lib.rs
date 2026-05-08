@@ -14,3 +14,7 @@ pub use http::HttpOrchestrator;
 pub use mysql::{MysqlOrchestrator, MysqlRequest};
 pub use redis::{RedisOrchestrator, RedisRequest};
 pub use ssh::SshDirectOrchestrator;
+
+// Re-exports for the bin so it doesn't need direct service-lib deps.
+pub use tools_mcp_http::{HttpAuth, HttpRequestSpec};
+pub use tools_mcp_ssh::SshExecRequest;

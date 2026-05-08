@@ -3760,11 +3760,7 @@ dependencies = [
  "tokio",
  "toml",
  "tools-mcp-core",
- "tools-mcp-http",
- "tools-mcp-mysql",
  "tools-mcp-orchestrator",
- "tools-mcp-redis",
- "tools-mcp-ssh",
 ]
 
 [[package]]

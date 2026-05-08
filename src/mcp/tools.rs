@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use tools_mcp_core::{Error, Result, Service, TunnelConfig};
 use tools_mcp_orchestrator::config::{Config, ConfigLoader, ConfigMerger, Profile, ServiceType};
 use tools_mcp_orchestrator::{
-    HttpOrchestrator, MysqlOrchestrator, MysqlRequest, RedisOrchestrator, RedisRequest,
-    SshDirectOrchestrator,
+    HttpAuth, HttpOrchestrator, HttpRequestSpec, MysqlOrchestrator, MysqlRequest,
+    RedisOrchestrator, RedisRequest, SshDirectOrchestrator, SshExecRequest,
 };
 
 /// JSON parameters for the `mysql_exec` MCP tool. Mirrors the CLI's
@@ -411,7 +411,7 @@ pub struct HttpExecParams {
 
 fn http_params_to_request_and_tunnel(
     p: HttpExecParams,
-) -> Result<(tools_mcp_http::HttpRequestSpec, Option<TunnelConfig>)> {
+) -> Result<(HttpRequestSpec, Option<TunnelConfig>)> {
     let mut header_pairs: Vec<(String, String)> = Vec::new();
     for raw in &p.headers {
         let (name, value) = raw.split_once(':').ok_or_else(|| {
@@ -426,17 +426,17 @@ fn http_params_to_request_and_tunnel(
     }
 
     let auth = match (p.bearer, p.basic) {
-        (Some(token), None) => tools_mcp_http::HttpAuth::Bearer(token),
+        (Some(token), None) => HttpAuth::Bearer(token),
         (None, Some(creds)) => {
             let (user, password) = creds
                 .split_once(':')
                 .ok_or_else(|| Error::Config("basic must be 'user:password'".to_string()))?;
-            tools_mcp_http::HttpAuth::Basic {
+            HttpAuth::Basic {
                 user: user.to_string(),
                 password: password.to_string(),
             }
         }
-        (None, None) => tools_mcp_http::HttpAuth::None,
+        (None, None) => HttpAuth::None,
         (Some(_), Some(_)) => {
             return Err(Error::Config(
                 "bearer and basic are mutually exclusive".to_string(),
@@ -444,7 +444,7 @@ fn http_params_to_request_and_tunnel(
         }
     };
 
-    let req = tools_mcp_http::HttpRequestSpec {
+    let req = HttpRequestSpec {
         method: p.method,
         url: p.url,
         headers: header_pairs,
@@ -568,14 +568,14 @@ pub struct SshExecParams {
 
 fn ssh_params_to_request_and_tunnel(
     p: SshExecParams,
-) -> Result<(tools_mcp_ssh::SshExecRequest, Option<TunnelConfig>)> {
+) -> Result<(SshExecRequest, Option<TunnelConfig>)> {
     if p.password.is_some() && p.key_path.is_some() {
         return Err(Error::Config(
             "password and key_path are mutually exclusive".to_string(),
         ));
     }
 
-    let req = tools_mcp_ssh::SshExecRequest {
+    let req = SshExecRequest {
         host: p.host,
         port: p.port.unwrap_or(22),
         user: p.user,
@@ -797,7 +797,7 @@ mod tests {
         );
         assert_eq!(req.body.as_deref(), Some(r#"{"a":1}"#.as_bytes()));
         match req.auth {
-            tools_mcp_http::HttpAuth::Bearer(t) => assert_eq!(t, "tok"),
+            HttpAuth::Bearer(t) => assert_eq!(t, "tok"),
             other => panic!("expected Bearer, got {other:?}"),
         }
         assert!(tunnel.is_none());
