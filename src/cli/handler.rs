@@ -84,6 +84,7 @@ impl CliHandler {
             user,
             password,
             database,
+            db: None,
             key_path,
             tunnel: tunnel_config,
         });
@@ -144,6 +145,7 @@ impl CliHandler {
             user: profile.user.clone(),
             password: profile.password.clone(),
             database: profile.database.clone(),
+            db: profile.db,
             key_path: profile.key_path.clone(),
             tunnel: profile.tunnel.clone(),
         }

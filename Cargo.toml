@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/tools-mcp-core",
     "crates/tools-mcp-mysql",
+    "crates/tools-mcp-redis",
 ]
 
 [package]
@@ -31,6 +32,7 @@ serde_yml = "0.0.12"
 tokio = { version = "1.40", features = ["full"] }
 tools-mcp-core = { path = "crates/tools-mcp-core" }
 tools-mcp-mysql = { path = "crates/tools-mcp-mysql" }
+tools-mcp-redis = { path = "crates/tools-mcp-redis" }
 toml = "0.8"
 
 [dev-dependencies]

@@ -11,6 +11,7 @@ impl ConfigMerger {
             user: override_cfg.user.or(base.user),
             password: override_cfg.password.or(base.password),
             database: override_cfg.database.or(base.database),
+            db: override_cfg.db.or(base.db),
             key_path: override_cfg.key_path.or(base.key_path),
             tunnel: override_cfg.tunnel.or(base.tunnel),
         }

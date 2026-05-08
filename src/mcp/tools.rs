@@ -129,6 +129,7 @@ fn params_to_config(p: &MysqlExecParams) -> Result<Config> {
         user: p.user.clone(),
         password: p.password.clone(),
         database: p.database.clone(),
+        db: None,
         key_path: None,
         tunnel: tunnel_config,
     });
@@ -144,6 +145,7 @@ fn profile_to_config(profile: &crate::config::Profile) -> Config {
         user: profile.user.clone(),
         password: profile.password.clone(),
         database: profile.database.clone(),
+        db: profile.db,
         key_path: profile.key_path.clone(),
         tunnel: profile.tunnel.clone(),
     }

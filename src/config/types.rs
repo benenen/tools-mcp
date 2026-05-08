@@ -70,6 +70,8 @@ pub struct Profile {
     pub user: Option<String>,
     pub password: Option<String>,
     pub database: Option<String>,
+    /// Redis database number. Ignored by non-Redis services.
+    pub db: Option<u32>,
     pub key_path: Option<String>,
     pub tunnel: Option<TunnelConfig>,
 }
@@ -89,6 +91,8 @@ pub struct Config {
     pub user: Option<String>,
     pub password: Option<String>,
     pub database: Option<String>,
+    /// Redis database number. Ignored by non-Redis services.
+    pub db: Option<u32>,
     pub key_path: Option<String>,
     pub tunnel: Option<TunnelConfig>,
 }
