@@ -1,5 +1,5 @@
-mod traits;
 mod mysql;
+mod traits;
 
-pub use traits::Connection;
 pub use mysql::MySQLConnection;
+pub use traits::Connection;

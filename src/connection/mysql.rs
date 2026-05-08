@@ -34,9 +34,9 @@ impl MySQLConnection {
         if self.conn.is_none() {
             self.connect().await?;
         }
-        self.conn.as_mut().ok_or_else(|| {
-            Error::Connection("Connection not established".to_string())
-        })
+        self.conn
+            .as_mut()
+            .ok_or_else(|| Error::Connection("Connection not established".to_string()))
     }
 }
 

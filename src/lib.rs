@@ -1,9 +1,9 @@
-pub mod error;
-pub mod config;
 pub mod cli;
-pub mod tunnel;
+pub mod config;
 pub mod connection;
-pub mod output;
+pub mod error;
 pub mod executor;
+pub mod output;
+pub mod tunnel;
 
 pub use error::{Error, Result};

@@ -1,5 +1,5 @@
-mod types;
 mod cli;
+mod types;
 
-pub use types::ExecutionResult;
 pub use cli::CliFormatter;
+pub use types::ExecutionResult;

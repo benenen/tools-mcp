@@ -1,5 +1,5 @@
-use crate::tunnel::traits::{Tunnel, TunnelEndpoint};
 use crate::error::Result;
+use crate::tunnel::traits::{Tunnel, TunnelEndpoint};
 use async_trait::async_trait;
 
 pub struct DirectTunnel {

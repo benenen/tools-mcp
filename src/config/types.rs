@@ -22,7 +22,6 @@ impl FromStr for ServiceType {
     }
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum TunnelConfig {
@@ -115,7 +114,11 @@ ssh_user: admin
 "#;
         let cfg: TunnelConfig = serde_yml::from_str(yaml).unwrap();
         match cfg {
-            TunnelConfig::Ssh { ssh_jumps, ssh_user, .. } => {
+            TunnelConfig::Ssh {
+                ssh_jumps,
+                ssh_user,
+                ..
+            } => {
                 assert_eq!(ssh_jumps, vec!["bastion.com".to_string()]);
                 assert_eq!(ssh_user, "admin");
             }

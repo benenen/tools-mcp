@@ -109,16 +109,19 @@ mod tests {
 
     #[test]
     fn test_parse_mysql_command() {
-        let args = Cli::try_parse_from(&[
+        let args = Cli::try_parse_from([
             "tools-mcp",
             "mysql",
             "SELECT 1",
             "--host=localhost",
             "--user=root",
-        ]).unwrap();
+        ])
+        .unwrap();
 
         match args.command {
-            Some(Commands::Mysql { query, host, user, .. }) => {
+            Some(Commands::Mysql {
+                query, host, user, ..
+            }) => {
                 assert_eq!(query, "SELECT 1");
                 assert_eq!(host, Some("localhost".to_string()));
                 assert_eq!(user, Some("root".to_string()));
@@ -130,31 +133,21 @@ mod tests {
     #[test]
     fn test_ssh_flag_requires_tunnel() {
         // Providing --ssh-jump without --tunnel should fail parsing
-        let result = Cli::try_parse_from(&[
-            "tools-mcp",
-            "--ssh-jump=bastion.com",
-            "mysql",
-            "SELECT 1",
-        ]);
-        assert!(result.is_err(), "expected parse error when --ssh-jump used without --tunnel");
+        let result =
+            Cli::try_parse_from(["tools-mcp", "--ssh-jump=bastion.com", "mysql", "SELECT 1"]);
+        assert!(
+            result.is_err(),
+            "expected parse error when --ssh-jump used without --tunnel"
+        );
     }
 
     #[test]
     fn test_tunnel_kind_parse() {
-        let cli = Cli::try_parse_from(&[
-            "tools-mcp",
-            "--tunnel=ssh",
-            "mysql",
-            "SELECT 1",
-        ]).unwrap();
+        let cli = Cli::try_parse_from(["tools-mcp", "--tunnel=ssh", "mysql", "SELECT 1"]).unwrap();
         assert!(matches!(cli.tunnel, Some(TunnelKind::Ssh)));
 
-        let cli = Cli::try_parse_from(&[
-            "tools-mcp",
-            "--tunnel=direct",
-            "mysql",
-            "SELECT 1",
-        ]).unwrap();
+        let cli =
+            Cli::try_parse_from(["tools-mcp", "--tunnel=direct", "mysql", "SELECT 1"]).unwrap();
         assert!(matches!(cli.tunnel, Some(TunnelKind::Direct)));
     }
 }

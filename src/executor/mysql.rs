@@ -1,15 +1,12 @@
 use crate::connection::MySQLConnection;
 use crate::error::Result;
 use crate::output::ExecutionResult;
-use mysql_async::{prelude::*, Row, Value};
+use mysql_async::{Row, Value, prelude::*};
 
 pub struct MySQLExecutor;
 
 impl MySQLExecutor {
-    pub async fn execute(
-        conn: &mut MySQLConnection,
-        query: &str,
-    ) -> Result<ExecutionResult> {
+    pub async fn execute(conn: &mut MySQLConnection, query: &str) -> Result<ExecutionResult> {
         let mysql_conn = conn.get_conn().await?;
 
         let result: Vec<Row> = mysql_conn.query(query).await?;
@@ -28,9 +25,7 @@ impl MySQLExecutor {
             .iter()
             .map(|row| {
                 (0..row.len())
-                    .map(|i| {
-                        Self::value_to_string(row.as_ref(i).unwrap_or(&Value::NULL))
-                    })
+                    .map(|i| Self::value_to_string(row.as_ref(i).unwrap_or(&Value::NULL)))
                     .collect()
             })
             .collect();

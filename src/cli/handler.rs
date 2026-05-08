@@ -58,7 +58,10 @@ impl CliHandler {
         if let Some(profile_name) = &profile {
             if let Some(toml_config) = ConfigLoader::load_default_toml()? {
                 let profile_cfg = toml_config.profiles.get(profile_name).ok_or_else(|| {
-                    Error::Config(format!("profile '{}' not found in config.toml", profile_name))
+                    Error::Config(format!(
+                        "profile '{}' not found in config.toml",
+                        profile_name
+                    ))
                 })?;
                 configs.push(Self::profile_to_config(profile_cfg));
             } else {

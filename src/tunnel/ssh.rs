@@ -157,10 +157,7 @@ impl Tunnel for SshTunnel {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .map_err(Error::Io)?;
-        let local_port = listener
-            .local_addr()
-            .map_err(Error::Io)?
-            .port();
+        let local_port = listener.local_addr().map_err(Error::Io)?.port();
 
         let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
         let target_host = self.target_host.clone();
@@ -234,14 +231,15 @@ impl SshTunnel {
 
         // Hop 0: TCP-connect directly.
         let first_jump = &self.ssh_jumps[0];
-        let handler = AcceptAnyHostKey { label: first_jump.clone() };
-        let mut session = client::connect(
-            cfg.clone(),
-            (first_jump.as_str(), self.ssh_port),
-            handler,
-        )
-        .await
-        .map_err(|e| Error::Connection(format!("SSH connect to {first_jump} failed: {e}")))?;
+        let handler = AcceptAnyHostKey {
+            label: first_jump.clone(),
+        };
+        let mut session =
+            client::connect(cfg.clone(), (first_jump.as_str(), self.ssh_port), handler)
+                .await
+                .map_err(|e| {
+                    Error::Connection(format!("SSH connect to {first_jump} failed: {e}"))
+                })?;
         authenticate(
             &mut session,
             &self.ssh_user,
@@ -273,7 +271,9 @@ impl SshTunnel {
             // ChannelStream is not Unpin; box-pin so connect_stream's bound holds.
             let stream = Box::pin(channel.into_stream());
 
-            let handler = AcceptAnyHostKey { label: next_jump.clone() };
+            let handler = AcceptAnyHostKey {
+                label: next_jump.clone(),
+            };
             let mut session = client::connect_stream(cfg.clone(), stream, handler)
                 .await
                 .map_err(|e| {
@@ -303,12 +303,7 @@ async fn forward_one(
     let channel = session
         .lock()
         .await
-        .channel_open_direct_tcpip(
-            target_host.clone(),
-            target_port as u32,
-            "127.0.0.1",
-            0u32,
-        )
+        .channel_open_direct_tcpip(target_host.clone(), target_port as u32, "127.0.0.1", 0u32)
         .await
         .map_err(|e| {
             Error::Connection(format!(
