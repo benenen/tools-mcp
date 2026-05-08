@@ -11,8 +11,9 @@ Unified tool for SSH, MySQL, and Redis connections with MCP (Model Context Proto
 
 ## Status
 
-This is the Phase 7 release. Currently implemented:
+This is the Phase 8 release. Currently implemented:
 
+- All four service orchestrators (`MysqlOrchestrator`, `RedisOrchestrator`, `HttpOrchestrator`, `SshDirectOrchestrator`) impl the `tools_mcp_core::Service` trait, defined as `async fn execute(Self::Request, Option<TunnelConfig>) -> Result<ExecutionResult>`. They live in the `tools-mcp-orchestrator` lib crate.
 - MySQL CLI mode (`tools-mcp mysql "..."`) and `mysql_exec` MCP tool.
 - Redis CLI mode (`tools-mcp redis "..."`) and `redis_exec` MCP tool.
 - HTTP CLI mode (`tools-mcp http GET https://...`) and `http_exec` MCP tool.
@@ -50,10 +51,12 @@ cargo build --release && cp target/release/tools-mcp ~/.local/bin/
 Rust toolchain install.
 
 This repo is a Cargo workspace. The `tools-mcp` binary crate lives at
-the repo root; the lib crates `tools-mcp-core` (the trait floor),
-`tools-mcp-mysql` (MySQL primitives), and `tools-mcp-redis` (Redis
-primitives) live under `crates/`. `cargo build` / `cargo test` from
-the root build and test all of them.
+the repo root (presentation layer only). The lib crates under `crates/`
+are: `tools-mcp-core` (trait floor + `Service` trait + `TunnelConfig`),
+`tools-mcp-mysql` / `tools-mcp-redis` / `tools-mcp-http` / `tools-mcp-ssh`
+(per-service primitives), and `tools-mcp-orchestrator` (Config/Profile/
+Loader/Merger + Tunnel impls + the four `<Svc>Orchestrator: impl Service`).
+`cargo build` / `cargo test` from the root build and test all of them.
 
 ## Usage
 
