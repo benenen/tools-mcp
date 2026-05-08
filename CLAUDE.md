@@ -25,22 +25,20 @@ Single integration test crate: `cargo test --test config_tests`.
 
 ## Architecture
 
+**Workspace.** The repo is a Cargo workspace with three crates under `crates/`. `tools-mcp-core` is service-agnostic (traits + shared types), `tools-mcp-mysql` is MySQL-specific (mysql_async), and `tools-mcp` is the binary that wires them up plus the CLI/MCP/config presentation. Adding a new service (Redis, SSH-direct) means a new sibling lib crate (`tools-mcp-redis`, …) plus a tunnel-dependent orchestrator in the bin.
+
 ### Module map (each module = one responsibility)
 
-| Module | Role |
+| Crate / Module | Role |
 | --- | --- |
-| `error` | `Error` enum with `source()` chain preservation; wrapping variants (`Io`/`Mysql`/`Yaml`/`Toml`) return their inner cause |
-| `config::types` | `Config` (merged runtime), `Profile` (TOML entry, `service_type` non-optional), `TomlConfig`, `TunnelConfig` (tagged enum: `Direct` unit / `Ssh` struct), `ServiceType` |
-| `config::loader` | `ConfigLoader::load_{toml,yaml}_file(&Path)` and `load_default_toml()`; honors `XDG_CONFIG_HOME`, falls back to `$HOME/.config/tools-mcp/config.toml`. Errors include the file path. |
-| `config::merger` | `ConfigMerger::merge_multiple(Vec<Config>)` folds with `Option::or` per field — later configs override earlier |
-| `cli::args` | clap `Cli`; SSH-specific flags live in `SshTunnelArgs` flattened via `#[command(flatten)]`; `--tunnel direct\|ssh` is a `ValueEnum` |
-| `cli::handler` | three-layer config merge in `build_config`; `cli_to_tunnel_config` validates SSH constraints |
-| `tunnel::{traits,direct,ssh}` | async `Tunnel` trait; `DirectTunnel` (no tunnel) and `SshTunnel` (russh-based, single/multi-hop, accept-any host key) |
-| `connection::{traits,mysql}` | async `Connection` trait; `MySQLConnection` takes `Box<dyn Tunnel>` and opens a `mysql_async::Pool` from `tunnel.establish()`'s endpoint |
-| `executor::mysql` | `MySQLExecutor::execute(&mut MySQLConnection, &str)` — query + Value→String |
-| `core::mysql` | `execute(config, query) -> ExecutionResult` — the shared MySQL execution path. CLI handler and MCP tool both delegate here so teardown semantics are identical. |
-| `mcp::{server,tools}` | rmcp-based stdio server. Single `mysql_exec` tool delegates to `core::mysql::execute`. Tool params mirror the CLI's `mysql` subcommand args + global tunnel/config flags. |
-| `output::{types,cli}` | `ExecutionResult { columns, rows, affected_rows }`; `CliFormatter` renders a `comfy-table` UTF-8 box |
+| `tools-mcp-core` (lib) | `Tunnel` / `Connection` async traits, `TunnelEndpoint`, `Error`/`Result` (with `Service(String)` for wrapped library errors), `ExecutionResult`. Sole external deps: `async-trait` + `serde`. The dependency floor for the workspace. |
+| `tools-mcp-mysql` (lib) | `MySQLConnection` (impl `core::Connection`), `MySQLExecutor`, and the entry `execute(tunnel, params, query) -> ExecutionResult`. Owns the `mysql_async` dep. Service-agnostic about how the tunnel was built. |
+| `tools-mcp` bin: `cli::*` | clap `Cli`, `SshTunnelArgs`, `CliHandler` — CLI mode parse + dispatch. |
+| `tools-mcp` bin: `mcp::*` | rmcp `ServerHandler`, `mysql_exec` tool wiring, params → `Config` conversion. |
+| `tools-mcp` bin: `config::*` | `Config`, `Profile`, `TunnelConfig`, `ConfigLoader`, `ConfigMerger`. Three-layer merge logic. |
+| `tools-mcp` bin: `tunnel::{direct,ssh}` | `DirectTunnel` and `SshTunnel` (russh) — the actual `Tunnel` trait impls. Stay in the bin so `tools-mcp-core` stays russh-free. |
+| `tools-mcp` bin: `core::mysql::execute(Config, &str)` | Orchestrator: validate Config, build the right tunnel, translate to `tools_mcp_mysql::MysqlParams`, call into the lib. CLI handler and MCP tool both delegate here. |
+| `tools-mcp` bin: `output::CliFormatter` | comfy-table renderer for CLI mode. Operates on `tools_mcp_core::ExecutionResult`. |
 
 ### Config priority (low → high)
 
@@ -64,7 +62,7 @@ Each layer is a `Config`; `ConfigMerger::merge_multiple` folds them so later lay
 - **`--tunnel` is a flag, not a subcommand.** The original plan had a second `#[command(subcommand)]` alongside `command`, which clap rejects. Correct shape: `--tunnel direct|ssh` (`ValueEnum`) + flat `--ssh-*` global flags inside `SshTunnelArgs`. Match this when adding more tunnel kinds.
 - **Help layout**: `Usage: tools-mcp [GLOBAL OPTIONS] <cmd> [OPTIONS] ...` uses `[GLOBAL OPTIONS]` as a handwritten placeholder; the constant `USAGE_LEGEND` in `cli/args.rs` (rendered via `after_help` on root and each subcommand) maps placeholders to actual help-section names. Adding a global flag is just `global = true` + `help_heading`; the `override_usage` strings don't need updating.
 - **Path arguments use `PathBuf`**, not `String` (e.g. `--config`).
-- **`Error::source()`**: when adding an error variant that wraps an underlying error, extend the exhaustive `match` so the cause chain stays intact.
+- **`Error::source()`**: lives in `tools-mcp-core`. The wrapping variant for non-IO errors is `Error::Service(String)` — service-specific error types (`mysql_async::Error`, `russh::Error`, `serde_yml::Error`, `toml::de::Error`) are flattened to a string at the boundary so core stays dep-free. If a future service needs to expose typed inner errors through `source()`, prefer adding a typed variant to `tools-mcp-<service>::Error` and only flattening at the bin boundary.
 - **`main.rs` prints errors via `Display` to stderr** (not `Debug`). If touching `main()`, keep the explicit `if let Err(e) = ... { eprintln!("Error: {e}"); exit(1); }` pattern.
 - **Stray SSH flags with `--tunnel=direct`** are a runtime `Error::Config` (not silently ignored); see `cli_to_tunnel_config`.
 - **CLI <-> MCP parity**: every CLI subcommand has (or will have) a paired MCP tool, and both delegate to the same `core::<service>` function. When adding a new subcommand, write the core function first, then wire CLI and MCP on top — never embed business logic in either presentation layer.
