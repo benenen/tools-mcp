@@ -48,7 +48,7 @@ impl SshExec {
                 ChannelMsg::Data { ref data } => {
                     stdout.extend_from_slice(data);
                 }
-                ChannelMsg::ExtendedData { ref data, ext } if ext == 1 => {
+                ChannelMsg::ExtendedData { ref data, ext: 1 } => {
                     stderr.extend_from_slice(data);
                 }
                 ChannelMsg::ExitStatus { exit_status } => {
