@@ -44,6 +44,59 @@ impl client::Handler for AcceptAnyHostKey {
     }
 }
 
+/// Authenticate `handle` using key path first (if provided), then
+/// password. Returns Err if neither succeeds or neither is supplied.
+///
+/// Note: passphrase-protected keys are not supported yet (Phase 3 can
+/// add `--ssh-key-passphrase`). The `None` passphrase means unencrypted
+/// keys only.
+#[allow(dead_code)]
+async fn authenticate(
+    handle: &mut client::Handle<AcceptAnyHostKey>,
+    user: &str,
+    password: Option<&str>,
+    key_path: Option<&std::path::Path>,
+) -> Result<()> {
+    if let Some(path) = key_path {
+        // load_secret_key returns russh::keys::key::KeyPair in russh-keys 0.46.
+        // None = no passphrase (passphrase-protected keys deferred to Phase 3).
+        let key = russh::keys::load_secret_key(path, None).map_err(|e| {
+            Error::Connection(format!(
+                "failed to load SSH key from '{}': {}",
+                path.display(),
+                e
+            ))
+        })?;
+        // authenticate_publickey takes Arc<key::KeyPair> and returns Result<bool>.
+        let success = handle
+            .authenticate_publickey(user, std::sync::Arc::new(key))
+            .await
+            .map_err(|e| Error::Connection(format!("SSH publickey auth failed: {e}")))?;
+        if success {
+            return Ok(());
+        }
+        // fall through to password if provided
+    }
+
+    if let Some(pw) = password {
+        // authenticate_password returns Result<bool> in russh 0.46.
+        let success = handle
+            .authenticate_password(user, pw)
+            .await
+            .map_err(|e| Error::Connection(format!("SSH password auth failed: {e}")))?;
+        if success {
+            return Ok(());
+        }
+        return Err(Error::Connection(
+            "SSH password authentication rejected".to_string(),
+        ));
+    }
+
+    Err(Error::Connection(
+        "SSH authentication failed: no usable credentials (provide --ssh-key-path or --ssh-password)".to_string(),
+    ))
+}
+
 impl SshTunnel {
     pub fn new(
         ssh_jumps: Vec<String>,
