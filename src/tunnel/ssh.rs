@@ -1,6 +1,8 @@
 use crate::error::{Error, Result};
 use crate::tunnel::traits::{Tunnel, TunnelEndpoint};
 use async_trait::async_trait;
+use russh::client;
+use russh::keys::key::PublicKey;
 
 /// SSH-jump tunnel. Establishes a chain of SSH sessions through
 /// `ssh_jumps` (in client→target order) and exposes a local TCP
@@ -15,6 +17,31 @@ pub struct SshTunnel {
     target_host: String,
     target_port: u16,
     active: bool,
+}
+
+/// russh client handler that accepts any server host key but logs a
+/// fingerprint warning to stderr. Phase 2 simplification — Phase 3 will
+/// add a strict-checking variant backed by ~/.ssh/known_hosts.
+#[allow(dead_code)]
+struct AcceptAnyHostKey {
+    label: String,
+}
+
+#[async_trait]
+impl client::Handler for AcceptAnyHostKey {
+    type Error = russh::Error;
+
+    async fn check_server_key(
+        &mut self,
+        server_public_key: &PublicKey,
+    ) -> std::result::Result<bool, Self::Error> {
+        let fingerprint = server_public_key.fingerprint();
+        eprintln!(
+            "warning: accepting unverified host key for {}: {}",
+            self.label, fingerprint
+        );
+        Ok(true)
+    }
 }
 
 impl SshTunnel {
