@@ -1,9 +1,9 @@
 use async_trait::async_trait;
-use tools_mcp_core::{Error, Result, Tunnel, TunnelEndpoint};
 use russh::client;
 use russh::keys::key::PublicKey;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tools_mcp_core::{Error, Result, Tunnel, TunnelEndpoint};
 
 /// SSH-jump tunnel. Establishes a chain of SSH sessions through
 /// `ssh_jumps` (in client→target order) and exposes a local TCP

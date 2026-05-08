@@ -1,7 +1,7 @@
 use crate::cli::{Cli, Commands, TunnelKind};
 use crate::config::{Config, ConfigLoader, ConfigMerger, ServiceType, TunnelConfig};
-use tools_mcp_core::{Error, Result};
 use crate::output::CliFormatter;
+use tools_mcp_core::{Error, Result};
 
 pub struct CliHandler;
 

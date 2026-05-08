@@ -5,7 +5,7 @@
 use crate::config::{Config, TunnelConfig};
 use crate::tunnel::{DirectTunnel, SshTunnel};
 use tools_mcp_core::{Error, ExecutionResult, Result, Tunnel};
-use tools_mcp_mysql::{execute as mysql_execute, MysqlParams};
+use tools_mcp_mysql::{MysqlParams, execute as mysql_execute};
 
 pub async fn execute(config: Config, query: &str) -> Result<ExecutionResult> {
     let host = config

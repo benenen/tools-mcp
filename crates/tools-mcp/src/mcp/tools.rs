@@ -1,10 +1,10 @@
 use crate::config::{Config, ConfigLoader, ServiceType, TunnelConfig};
 use crate::core::mysql;
-use tools_mcp_core::{Error, Result};
 use crate::output::ExecutionResult;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use tools_mcp_core::{Error, Result};
 
 /// JSON parameters for the `mysql_exec` MCP tool. Mirrors the CLI's
 /// `mysql` subcommand args plus the global tunnel/config flags, so an

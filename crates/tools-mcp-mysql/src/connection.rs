@@ -1,6 +1,6 @@
+use async_trait::async_trait;
 use mysql_async::{Conn, OptsBuilder, Pool};
 use tools_mcp_core::{Connection, Error, Result, Tunnel};
-use async_trait::async_trait;
 
 pub struct MySQLConnection {
     tunnel: Box<dyn Tunnel>,
@@ -92,19 +92,26 @@ mod tests {
 
     /// Minimal Tunnel impl so this lib's tests don't depend on
     /// DirectTunnel (which lives in the bin crate).
-    struct TestTunnel { active: bool }
+    struct TestTunnel {
+        active: bool,
+    }
 
     #[async_trait]
     impl Tunnel for TestTunnel {
         async fn establish(&mut self) -> Result<TunnelEndpoint> {
             self.active = true;
-            Ok(TunnelEndpoint { host: "localhost".to_string(), port: 3306 })
+            Ok(TunnelEndpoint {
+                host: "localhost".to_string(),
+                port: 3306,
+            })
         }
         async fn close(&mut self) -> Result<()> {
             self.active = false;
             Ok(())
         }
-        fn is_active(&self) -> bool { self.active }
+        fn is_active(&self) -> bool {
+            self.active
+        }
     }
 
     #[tokio::test]

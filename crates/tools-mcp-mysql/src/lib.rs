@@ -5,5 +5,5 @@ pub mod execute;
 pub mod executor;
 
 pub use connection::MySQLConnection;
-pub use execute::{execute, MysqlParams};
+pub use execute::{MysqlParams, execute};
 pub use executor::MySQLExecutor;

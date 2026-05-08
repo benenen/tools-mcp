@@ -1,6 +1,6 @@
 use crate::config::{Config, TomlConfig};
-use tools_mcp_core::{Error, Result};
 use std::path::Path;
+use tools_mcp_core::{Error, Result};
 
 pub struct ConfigLoader;
 
