@@ -1,5 +1,7 @@
-mod traits;
 mod direct;
+mod ssh;
+mod traits;
 
-pub use traits::{Tunnel, TunnelEndpoint};
 pub use direct::DirectTunnel;
+pub use ssh::SshTunnel;
+pub use traits::{Tunnel, TunnelEndpoint};
