@@ -128,6 +128,51 @@ pub enum Commands {
         #[arg(long, help_heading = "Redis")]
         profile: Option<String>,
     },
+
+    /// Execute an HTTP request
+    #[command(override_usage = "tools-mcp [GLOBAL OPTIONS] http [OPTIONS] <METHOD> <URL>")]
+    #[command(after_help = USAGE_LEGEND)]
+    Http {
+        /// HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS).
+        method: String,
+
+        /// Full URL (http:// or https://).
+        url: String,
+
+        /// Extra header `Name: Value`. Repeat for multiple headers.
+        #[arg(long = "header", short = 'H', help_heading = "HTTP")]
+        headers: Vec<String>,
+
+        /// Request body (raw string).
+        #[arg(long, help_heading = "HTTP", conflicts_with = "data_file")]
+        data: Option<String>,
+
+        /// Read request body from a file path.
+        #[arg(long = "data-file", help_heading = "HTTP", conflicts_with = "data")]
+        data_file: Option<std::path::PathBuf>,
+
+        /// Set Content-Type: application/json (does not transform the body).
+        #[arg(long, help_heading = "HTTP")]
+        json: bool,
+
+        /// `Authorization: Bearer <TOKEN>` shortcut.
+        #[arg(long, help_heading = "HTTP", conflicts_with = "basic")]
+        bearer: Option<String>,
+
+        /// HTTP Basic auth as `user:password`.
+        #[arg(long, help_heading = "HTTP", conflicts_with = "bearer")]
+        basic: Option<String>,
+
+        /// Accept invalid TLS certificates (e.g. self-signed). DANGER: only
+        /// use for trusted internal services.
+        #[arg(long, help_heading = "HTTP")]
+        insecure: bool,
+
+        /// Print full ExecutionResult table (status + headers + body) instead
+        /// of just the body. Default: print body only.
+        #[arg(long = "include-headers", short = 'i', help_heading = "HTTP")]
+        include_headers: bool,
+    },
 }
 
 #[cfg(test)]

@@ -42,6 +42,33 @@ impl CliHandler {
                 let config = Self::build_config_redis(&cli, host, port, password, db, profile)?;
                 Self::execute_redis(&command, config).await
             }
+            Some(Commands::Http {
+                method,
+                url,
+                headers,
+                data,
+                data_file,
+                json,
+                bearer,
+                basic,
+                insecure,
+                include_headers,
+            }) => {
+                Self::execute_http(
+                    &cli,
+                    method,
+                    url,
+                    headers,
+                    data,
+                    data_file,
+                    json,
+                    bearer,
+                    basic,
+                    insecure,
+                    include_headers,
+                )
+                .await
+            }
             None => Err(Error::Config(
                 "No command specified. Run with --help for usage.".to_string(),
             )),
@@ -216,6 +243,97 @@ impl CliHandler {
         let result = crate::core::redis::execute(config, command).await?;
         let output = CliFormatter::format(&result);
         println!("{output}");
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn execute_http(
+        cli: &Cli,
+        method: String,
+        url: String,
+        headers: Vec<String>,
+        data: Option<String>,
+        data_file: Option<std::path::PathBuf>,
+        json: bool,
+        bearer: Option<String>,
+        basic: Option<String>,
+        insecure: bool,
+        include_headers: bool,
+    ) -> Result<()> {
+        // Parse `Name: Value` strings into pairs.
+        let mut header_pairs: Vec<(String, String)> = Vec::new();
+        for raw in headers {
+            let (name, value) = raw.split_once(':').ok_or_else(|| {
+                Error::Config(format!(
+                    "--header '{raw}' must be 'Name: Value' (missing ':')"
+                ))
+            })?;
+            header_pairs.push((name.trim().to_string(), value.trim().to_string()));
+        }
+        if json {
+            header_pairs.push((
+                "Content-Type".to_string(),
+                "application/json".to_string(),
+            ));
+        }
+
+        // Body
+        let body: Option<Vec<u8>> = match (data, data_file) {
+            (Some(s), None) => Some(s.into_bytes()),
+            (None, Some(path)) => {
+                let bytes = std::fs::read(&path).map_err(|e| {
+                    Error::Config(format!(
+                        "cannot read --data-file '{}': {e}",
+                        path.display()
+                    ))
+                })?;
+                Some(bytes)
+            }
+            (None, None) => None,
+            (Some(_), Some(_)) => unreachable!("clap conflicts_with prevents this"),
+        };
+
+        // Auth
+        let auth = match (bearer, basic) {
+            (Some(token), None) => tools_mcp_http::HttpAuth::Bearer(token),
+            (None, Some(creds)) => {
+                let (user, password) = creds.split_once(':').ok_or_else(|| {
+                    Error::Config("--basic must be 'user:password'".to_string())
+                })?;
+                tools_mcp_http::HttpAuth::Basic {
+                    user: user.to_string(),
+                    password: password.to_string(),
+                }
+            }
+            (None, None) => tools_mcp_http::HttpAuth::None,
+            (Some(_), Some(_)) => unreachable!("clap conflicts_with prevents this"),
+        };
+
+        let req = tools_mcp_http::HttpRequestSpec {
+            method,
+            url,
+            headers: header_pairs,
+            body,
+            auth,
+            insecure,
+        };
+
+        let tunnel_config = Self::cli_to_tunnel_config(cli)?;
+        let result = crate::core::http::execute(req, tunnel_config).await?;
+
+        if include_headers {
+            println!("{}", CliFormatter::format(&result));
+        } else {
+            // Default: print just the body row (the last row, by construction).
+            if let Some(body_row) = result.rows.last() {
+                if body_row.len() >= 2 && body_row[0] == "body" {
+                    println!("{}", body_row[1]);
+                } else {
+                    // Fallback if row layout drifts: print the whole table.
+                    println!("{}", CliFormatter::format(&result));
+                }
+            }
+        }
         Ok(())
     }
 }
