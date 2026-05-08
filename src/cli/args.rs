@@ -37,13 +37,13 @@ pub struct Cli {
     pub command: Option<Commands>,
 }
 
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Copy, Debug)]
 pub enum TunnelKind {
     Direct,
     Ssh,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
     /// Execute a MySQL query
     Mysql {

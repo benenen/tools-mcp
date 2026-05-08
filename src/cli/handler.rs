@@ -1,0 +1,164 @@
+use crate::cli::{Cli, Commands, TunnelKind};
+use crate::config::{Config, ConfigLoader, ConfigMerger, ServiceType, TunnelConfig};
+use crate::connection::{Connection, MySQLConnection};
+use crate::error::{Error, Result};
+use crate::executor::MySQLExecutor;
+use crate::output::CliFormatter;
+use crate::tunnel::{DirectTunnel, Tunnel};
+
+pub struct CliHandler;
+
+impl CliHandler {
+    pub async fn handle(cli: Cli) -> Result<()> {
+        match cli.command.clone() {
+            Some(Commands::Mysql {
+                query,
+                host,
+                port,
+                user,
+                password,
+                database,
+                profile,
+            }) => {
+                let config = Self::build_config(
+                    &cli,
+                    ServiceType::Mysql,
+                    host,
+                    port,
+                    user,
+                    password,
+                    database,
+                    None, // key_path is not a MySQL flag
+                    profile,
+                )?;
+
+                Self::execute_mysql(&query, config).await
+            }
+            None => Err(Error::Config(
+                "No command specified. Run with --help for usage.".to_string(),
+            )),
+        }
+    }
+
+    fn build_config(
+        cli: &Cli,
+        service_type: ServiceType,
+        host: Option<String>,
+        port: Option<u16>,
+        user: Option<String>,
+        password: Option<String>,
+        database: Option<String>,
+        key_path: Option<String>,
+        profile: Option<String>,
+    ) -> Result<Config> {
+        let mut configs: Vec<Config> = Vec::new();
+
+        // 1. Default TOML profile (if --profile=NAME and ~/.config/tools-mcp/config.toml exists)
+        if let Some(profile_name) = &profile {
+            if let Some(toml_config) = ConfigLoader::load_default_toml()? {
+                let profile_cfg = toml_config.profiles.get(profile_name).ok_or_else(|| {
+                    Error::Config(format!("profile '{}' not found in config.toml", profile_name))
+                })?;
+                configs.push(Self::profile_to_config(profile_cfg));
+            } else {
+                return Err(Error::Config(format!(
+                    "profile '{}' requested but no ~/.config/tools-mcp/config.toml found",
+                    profile_name
+                )));
+            }
+        }
+
+        // 2. YAML config file (if --config=PATH)
+        if let Some(config_path) = cli.config.as_deref() {
+            let yaml_config = ConfigLoader::load_yaml_file(config_path)?;
+            configs.push(yaml_config);
+        }
+
+        // 3. CLI arguments (highest priority)
+        let tunnel_config = Self::cli_to_tunnel_config(cli)?;
+        configs.push(Config {
+            service_type: Some(service_type),
+            host,
+            port,
+            user,
+            password,
+            database,
+            key_path,
+            tunnel: tunnel_config,
+        });
+
+        Ok(ConfigMerger::merge_multiple(configs))
+    }
+
+    fn cli_to_tunnel_config(cli: &Cli) -> Result<Option<TunnelConfig>> {
+        let Some(kind) = cli.tunnel else {
+            return Ok(None);
+        };
+        match kind {
+            TunnelKind::Direct => Ok(Some(TunnelConfig::Direct)),
+            TunnelKind::Ssh => {
+                let ssh_jump = cli.ssh_jump.clone().ok_or_else(|| {
+                    Error::Config("--ssh-jump is required when --tunnel=ssh".to_string())
+                })?;
+                let ssh_user = cli.ssh_user.clone().ok_or_else(|| {
+                    Error::Config("--ssh-user is required when --tunnel=ssh".to_string())
+                })?;
+                Ok(Some(TunnelConfig::Ssh {
+                    ssh_jump,
+                    ssh_user,
+                    ssh_password: cli.ssh_password.clone(),
+                    ssh_key_path: cli.ssh_key_path.clone(),
+                    ssh_port: cli.ssh_port.unwrap_or(22),
+                }))
+            }
+        }
+    }
+
+    fn profile_to_config(profile: &crate::config::Profile) -> Config {
+        Config {
+            service_type: Some(profile.service_type.clone()),
+            host: profile.host.clone(),
+            port: profile.port,
+            user: profile.user.clone(),
+            password: profile.password.clone(),
+            database: profile.database.clone(),
+            key_path: profile.key_path.clone(),
+            tunnel: profile.tunnel.clone(),
+        }
+    }
+
+    async fn execute_mysql(query: &str, config: Config) -> Result<()> {
+        let host = config
+            .host
+            .ok_or_else(|| Error::Config("MySQL host is required".to_string()))?;
+        let port = config.port.unwrap_or(3306);
+        let user = config
+            .user
+            .ok_or_else(|| Error::Config("MySQL user is required".to_string()))?;
+
+        // Phase 1: only DirectTunnel is implemented. Refuse SSH explicitly.
+        if let Some(TunnelConfig::Ssh { .. }) = config.tunnel {
+            return Err(Error::Config(
+                "SSH tunnel is not yet implemented in Phase 1".to_string(),
+            ));
+        }
+
+        let tunnel: Box<dyn Tunnel> = Box::new(DirectTunnel::new(host, port));
+        let mut conn = MySQLConnection::new(tunnel, user, config.password, config.database);
+        let result = MySQLExecutor::execute(&mut conn, query).await?;
+        let output = CliFormatter::format(&result);
+        println!("{}", output);
+        conn.disconnect().await?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cli_handler_new() {
+        let _handler = CliHandler;
+    }
+}
