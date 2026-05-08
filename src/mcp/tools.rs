@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tools_mcp_core::{Error, Result, Service, TunnelConfig};
 use tools_mcp_orchestrator::config::{Config, ConfigLoader, ConfigMerger, Profile, ServiceType};
-use tools_mcp_orchestrator::{MysqlOrchestrator, MysqlRequest, RedisOrchestrator, RedisRequest};
+use tools_mcp_orchestrator::{
+    HttpOrchestrator, MysqlOrchestrator, MysqlRequest, RedisOrchestrator, RedisRequest,
+};
 
 /// JSON parameters for the `mysql_exec` MCP tool. Mirrors the CLI's
 /// `mysql` subcommand args plus the global tunnel/config flags, so an
@@ -511,7 +513,7 @@ fn build_tunnel_config_for_http(
 /// Public entry point for the http_exec tool.
 pub async fn http_exec(params: HttpExecParams) -> Result<ExecutionResult> {
     let (req, tunnel_config) = http_params_to_request_and_tunnel(params)?;
-    crate::core::http::execute(req, tunnel_config).await
+    HttpOrchestrator::execute(req, tunnel_config).await
 }
 
 /// JSON parameters for the `ssh_exec` MCP tool.

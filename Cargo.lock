@@ -3802,6 +3802,7 @@ name = "tools-mcp-orchestrator"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "reqwest",
  "russh",
  "serde",
  "serde_yml",
@@ -3809,6 +3810,7 @@ dependencies = [
  "tokio",
  "toml",
  "tools-mcp-core",
+ "tools-mcp-http",
  "tools-mcp-mysql",
  "tools-mcp-redis",
  "tools-mcp-ssh",

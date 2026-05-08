@@ -4,9 +4,11 @@
 //! `SshTunnel` runtime impls. The bin (cli + mcp) calls into here.
 
 pub mod config;
+pub mod http;
 pub mod mysql;
 pub mod redis;
 pub mod tunnel;
 
+pub use http::HttpOrchestrator;
 pub use mysql::{MysqlOrchestrator, MysqlRequest};
 pub use redis::{RedisOrchestrator, RedisRequest};

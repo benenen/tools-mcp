@@ -2,7 +2,9 @@ use crate::cli::{Cli, Commands, TunnelKind};
 use crate::output::CliFormatter;
 use tools_mcp_core::{Error, Result, Service, TunnelConfig};
 use tools_mcp_orchestrator::config::{Config, ConfigLoader, ConfigMerger, ServiceType};
-use tools_mcp_orchestrator::{MysqlOrchestrator, MysqlRequest, RedisOrchestrator, RedisRequest};
+use tools_mcp_orchestrator::{
+    HttpOrchestrator, MysqlOrchestrator, MysqlRequest, RedisOrchestrator, RedisRequest,
+};
 
 pub struct CliHandler;
 
@@ -395,7 +397,7 @@ impl CliHandler {
         };
 
         let tunnel_config = Self::cli_to_tunnel_config(cli)?;
-        let result = crate::core::http::execute(req, tunnel_config).await?;
+        let result = HttpOrchestrator::execute(req, tunnel_config).await?;
 
         if include_headers {
             println!("{}", CliFormatter::format(&result));
