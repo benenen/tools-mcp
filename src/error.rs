@@ -25,7 +25,17 @@ impl fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::Io(e) => Some(e),
+            Error::Mysql(e) => Some(e),
+            Error::Yaml(e) => Some(e),
+            Error::Toml(e) => Some(e),
+            Error::Config(_) | Error::Connection(_) | Error::Execution(_) => None,
+        }
+    }
+}
 
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
