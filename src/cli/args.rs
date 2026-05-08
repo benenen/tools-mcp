@@ -173,6 +173,42 @@ pub enum Commands {
         #[arg(long = "include-headers", short = 'i', help_heading = "HTTP")]
         include_headers: bool,
     },
+
+    /// Execute a shell command on an SSH target
+    #[command(override_usage = "tools-mcp [GLOBAL OPTIONS] ssh [OPTIONS] <COMMAND>")]
+    #[command(after_help = USAGE_LEGEND)]
+    Ssh {
+        /// Shell command to execute on the target.
+        command: String,
+
+        /// Target SSH host.
+        #[arg(long, help_heading = "SSH")]
+        host: String,
+
+        /// Target SSH port (default 22).
+        #[arg(long, help_heading = "SSH", default_value_t = 22)]
+        port: u16,
+
+        /// Target SSH user.
+        #[arg(long, help_heading = "SSH")]
+        user: String,
+
+        /// Target SSH password (mutually exclusive with --key-path).
+        #[arg(long, help_heading = "SSH", conflicts_with = "key_path")]
+        password: Option<String>,
+
+        /// Target SSH key path. Unencrypted keys only (passphrases not
+        /// supported in this phase).
+        #[arg(long = "key-path", help_heading = "SSH", conflicts_with = "password")]
+        key_path: Option<std::path::PathBuf>,
+
+        /// Print full ExecutionResult table (exit_code + stdout + stderr)
+        /// instead of streaming stdout/stderr to the terminal. Default:
+        /// stream stdout to stdout, stderr to stderr, exit with the
+        /// remote exit code.
+        #[arg(long = "include-headers", short = 'i', help_heading = "SSH")]
+        include_headers: bool,
+    },
 }
 
 #[cfg(test)]

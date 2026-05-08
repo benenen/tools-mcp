@@ -69,6 +69,27 @@ impl CliHandler {
                 )
                 .await
             }
+            Some(Commands::Ssh {
+                command,
+                host,
+                port,
+                user,
+                password,
+                key_path,
+                include_headers,
+            }) => {
+                Self::execute_ssh(
+                    &cli,
+                    command,
+                    host,
+                    port,
+                    user,
+                    password,
+                    key_path,
+                    include_headers,
+                )
+                .await
+            }
             None => Err(Error::Config(
                 "No command specified. Run with --help for usage.".to_string(),
             )),
@@ -243,6 +264,62 @@ impl CliHandler {
         let result = crate::core::redis::execute(config, command).await?;
         let output = CliFormatter::format(&result);
         println!("{output}");
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn execute_ssh(
+        cli: &Cli,
+        command: String,
+        host: String,
+        port: u16,
+        user: String,
+        password: Option<String>,
+        key_path: Option<std::path::PathBuf>,
+        include_headers: bool,
+    ) -> Result<()> {
+        let req = tools_mcp_ssh::SshExecRequest {
+            host,
+            port,
+            user,
+            password,
+            key_path,
+            command,
+        };
+
+        let tunnel_config = Self::cli_to_tunnel_config(cli)?;
+        let result = crate::core::ssh::execute(req, tunnel_config).await?;
+
+        if include_headers {
+            println!("{}", CliFormatter::format(&result));
+            return Ok(());
+        }
+
+        // Default: print stdout to stdout, stderr to stderr, exit with the
+        // remote exit code.
+        let mut exit_code: i32 = 0;
+        for row in &result.rows {
+            if row.len() < 2 {
+                continue;
+            }
+            match row[0].as_str() {
+                "exit_code" => {
+                    exit_code = row[1].parse().unwrap_or(0);
+                }
+                "stdout" => {
+                    use std::io::Write;
+                    let _ = std::io::stdout().write_all(row[1].as_bytes());
+                }
+                "stderr" => {
+                    use std::io::Write;
+                    let _ = std::io::stderr().write_all(row[1].as_bytes());
+                }
+                _ => {}
+            }
+        }
+        if exit_code != 0 {
+            std::process::exit(exit_code);
+        }
         Ok(())
     }
 
