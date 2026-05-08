@@ -3,11 +3,12 @@ use crate::tunnel::traits::{Tunnel, TunnelEndpoint};
 use async_trait::async_trait;
 use russh::client;
 use russh::keys::key::PublicKey;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// SSH-jump tunnel. Establishes a chain of SSH sessions through
 /// `ssh_jumps` (in client→target order) and exposes a local TCP
 /// endpoint on 127.0.0.1 that forwards to `(target_host, target_port)`.
-#[derive(Debug)]
 pub struct SshTunnel {
     ssh_jumps: Vec<String>,
     ssh_user: String,
@@ -16,7 +17,20 @@ pub struct SshTunnel {
     ssh_port: u16,
     target_host: String,
     target_port: u16,
-    active: bool,
+    /// Set to Some after establish() succeeds.
+    state: Option<SshTunnelState>,
+}
+
+struct SshTunnelState {
+    local_port: u16,
+    /// Drop signals all background tasks (listener + each forwarder) to stop.
+    shutdown: tokio::sync::watch::Sender<bool>,
+    /// JoinHandle for the listener-accept loop. Dropped in close() after
+    /// signaling shutdown to make close() bounded-time.
+    listener_task: tokio::task::JoinHandle<()>,
+    /// SSH session handles, ordered client-to-target. Kept alive so the
+    /// channels in the listener task don't drop their parents.
+    _sessions: Vec<Arc<Mutex<client::Handle<AcceptAnyHostKey>>>>,
 }
 
 /// russh client handler that accepts any server host key but logs a
@@ -120,7 +134,7 @@ impl SshTunnel {
             ssh_port,
             target_host,
             target_port,
-            active: false,
+            state: None,
         })
     }
 }
@@ -128,19 +142,150 @@ impl SshTunnel {
 #[async_trait]
 impl Tunnel for SshTunnel {
     async fn establish(&mut self) -> Result<TunnelEndpoint> {
-        Err(Error::Connection(
-            "SshTunnel::establish not yet implemented".to_string(),
-        ))
+        if self.state.is_some() {
+            return Err(Error::Connection(
+                "SshTunnel::establish called twice".to_string(),
+            ));
+        }
+
+        // Build SSH session chain: open the first session via TCP, then
+        // chain subsequent sessions over direct-tcpip channels.
+        let sessions = self.build_session_chain().await?;
+        let final_handle = Arc::clone(sessions.last().expect("chain has at least one session"));
+
+        // Bind local listener and capture port BEFORE spawning so we can
+        // return the endpoint synchronously.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(Error::Io)?;
+        let local_port = listener
+            .local_addr()
+            .map_err(Error::Io)?
+            .port();
+
+        let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
+        let target_host = self.target_host.clone();
+        let target_port = self.target_port;
+
+        let listener_task = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = shutdown_rx.changed() => {
+                        if *shutdown_rx.borrow() {
+                            break;
+                        }
+                    }
+                    accepted = listener.accept() => {
+                        let (stream, _) = match accepted {
+                            Ok(p) => p,
+                            Err(e) => {
+                                eprintln!("ssh tunnel: listener accept failed: {e}");
+                                break;
+                            }
+                        };
+                        let host = target_host.clone();
+                        let session = Arc::clone(&final_handle);
+                        tokio::spawn(async move {
+                            if let Err(e) = forward_one(session, host, target_port, stream).await {
+                                eprintln!("ssh tunnel: forward connection failed: {e}");
+                            }
+                        });
+                    }
+                }
+            }
+        });
+
+        self.state = Some(SshTunnelState {
+            local_port,
+            shutdown: shutdown_tx,
+            listener_task,
+            _sessions: sessions,
+        });
+
+        Ok(TunnelEndpoint {
+            host: "127.0.0.1".to_string(),
+            port: local_port,
+        })
     }
 
     async fn close(&mut self) -> Result<()> {
-        self.active = false;
+        if let Some(state) = self.state.take() {
+            let _ = state.shutdown.send(true);
+            // Best-effort wait for listener task; ignore JoinError.
+            let _ = state.listener_task.await;
+            // _sessions drop here, closing each SSH connection in reverse order.
+        }
         Ok(())
     }
 
     fn is_active(&self) -> bool {
-        self.active
+        self.state.is_some()
     }
+}
+
+impl SshTunnel {
+    /// Open SSH session(s), one per jump host, chained via direct-tcpip.
+    /// Returns the chain in client→target order; the last entry is the
+    /// session that should open the final direct-tcpip channel to target.
+    async fn build_session_chain(
+        &self,
+    ) -> Result<Vec<Arc<Mutex<client::Handle<AcceptAnyHostKey>>>>> {
+        // Phase 5: single jump only. Multi-jump implemented in Task 6.
+        let jump = &self.ssh_jumps[0];
+        let cfg = std::sync::Arc::new(client::Config::default());
+        let handler = AcceptAnyHostKey { label: jump.clone() };
+
+        let mut session = client::connect(cfg, (jump.as_str(), self.ssh_port), handler)
+            .await
+            .map_err(|e| Error::Connection(format!("SSH connect to {jump} failed: {e}")))?;
+
+        authenticate(
+            &mut session,
+            &self.ssh_user,
+            self.ssh_password.as_deref(),
+            self.ssh_key_path.as_deref(),
+        )
+        .await?;
+
+        if self.ssh_jumps.len() > 1 {
+            return Err(Error::Connection(
+                "multi-hop SSH tunnel not yet implemented (Task 6)".to_string(),
+            ));
+        }
+
+        Ok(vec![Arc::new(Mutex::new(session))])
+    }
+}
+
+/// Bridge `local_stream` ⟷ direct-tcpip channel from `session` to `target_host:target_port`.
+async fn forward_one(
+    session: Arc<Mutex<client::Handle<AcceptAnyHostKey>>>,
+    target_host: String,
+    target_port: u16,
+    mut local_stream: tokio::net::TcpStream,
+) -> Result<()> {
+    let channel = session
+        .lock()
+        .await
+        .channel_open_direct_tcpip(
+            target_host.clone(),
+            target_port as u32,
+            "127.0.0.1",
+            0u32,
+        )
+        .await
+        .map_err(|e| {
+            Error::Connection(format!(
+                "open direct-tcpip to {target_host}:{target_port} failed: {e}"
+            ))
+        })?;
+    // ChannelStream is not Unpin (ChannelTx contains a Pin<Box<dyn Future>>),
+    // so we box-pin it before calling copy_bidirectional.
+    let mut channel_stream = Box::pin(channel.into_stream());
+    tokio::io::copy_bidirectional(&mut local_stream, &mut channel_stream)
+        .await
+        .map_err(Error::Io)?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -149,17 +294,10 @@ mod tests {
 
     #[test]
     fn test_new_rejects_empty_jumps() {
-        let err = SshTunnel::new(
-            vec![],
-            "u".into(),
-            None,
-            None,
-            22,
-            "t".into(),
-            3306,
-        )
-        .unwrap_err();
-        assert!(matches!(err, Error::Config(_)));
+        assert!(matches!(
+            SshTunnel::new(vec![], "u".into(), None, None, 22, "t".into(), 3306),
+            Err(Error::Config(_))
+        ));
     }
 
     #[test]
@@ -171,6 +309,21 @@ mod tests {
             None,
             22,
             "mysql.internal".into(),
+            3306,
+        )
+        .unwrap();
+        assert!(!t.is_active());
+    }
+
+    #[tokio::test]
+    async fn test_ssh_tunnel_state_starts_inactive() {
+        let t = SshTunnel::new(
+            vec!["bastion".into()],
+            "u".into(),
+            Some("p".into()),
+            None,
+            22,
+            "target".into(),
             3306,
         )
         .unwrap();
