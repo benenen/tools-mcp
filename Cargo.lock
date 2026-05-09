@@ -4375,7 +4375,9 @@ dependencies = [
  "toml",
  "tools-mcp-core",
  "tools-mcp-http",
+ "tools-mcp-mongo",
  "tools-mcp-mysql",
+ "tools-mcp-pgsql",
  "tools-mcp-redis",
  "tools-mcp-ssh",
 ]

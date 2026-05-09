@@ -5,8 +5,9 @@ use std::path::PathBuf;
 use tools_mcp_core::{Error, Result, Service, TunnelConfig};
 use tools_mcp_orchestrator::config::{Config, ConfigLoader, ConfigMerger, Profile, ServiceType};
 use tools_mcp_orchestrator::{
-    HttpAuth, HttpOrchestrator, HttpRequestSpec, MysqlOrchestrator, MysqlRequest,
-    RedisOrchestrator, RedisRequest, SshDirectOrchestrator, SshExecRequest,
+    HttpAuth, HttpOrchestrator, HttpRequestSpec, MongoOrchestrator, MongoRequest,
+    MysqlOrchestrator, MysqlRequest, PgsqlOrchestrator, PgsqlRequest, RedisOrchestrator,
+    RedisRequest, SshDirectOrchestrator, SshExecRequest,
 };
 
 /// JSON parameters for the `mysql_exec` MCP tool. Mirrors the CLI's
@@ -207,6 +208,154 @@ pub async fn mysql_exec(params: MysqlExecParams) -> Result<ExecutionResult> {
     MysqlOrchestrator::execute(req, tunnel).await
 }
 
+/// JSON parameters for the `pgsql_exec` MCP tool. Mirrors the CLI's
+/// `pgsql` subcommand args plus the global tunnel/config flags.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct PgsqlExecParams {
+    /// SQL query to execute.
+    pub query: String,
+
+    /// Pgsql host (overrides profile / yaml).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+
+    /// Pgsql port (default 5432).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+
+    /// Pgsql user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
+
+    /// Pgsql password.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+
+    /// Database name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub database: Option<String>,
+
+    /// Profile name from ~/.config/tools-mcp/config.toml.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+
+    /// Path to a YAML config file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<PathBuf>,
+
+    /// Tunnel kind. "direct" (default) or "ssh".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tunnel: Option<TunnelKind>,
+
+    /// SSH jump host(s). Comma-separated string for multi-hop, or a JSON array.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_jump: Option<SshJumpInput>,
+
+    /// SSH jump user (used when `tunnel = "ssh"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_user: Option<String>,
+
+    /// SSH jump password.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_password: Option<String>,
+
+    /// SSH key path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_key_path: Option<String>,
+
+    /// SSH jump port (default 22).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_port: Option<u16>,
+}
+
+fn pgsql_params_to_config(p: &PgsqlExecParams) -> Result<Config> {
+    let mut configs: Vec<Config> = Vec::new();
+
+    if let Some(profile_name) = &p.profile {
+        let toml_config = ConfigLoader::load_default_toml()?.ok_or_else(|| {
+            Error::Config(format!(
+                "profile '{profile_name}' requested but no ~/.config/tools-mcp/config.toml found"
+            ))
+        })?;
+        let profile_cfg = toml_config.profiles.get(profile_name).ok_or_else(|| {
+            Error::Config(format!("profile '{profile_name}' not found in config.toml"))
+        })?;
+        configs.push(profile_to_config(profile_cfg));
+    }
+
+    if let Some(path) = p.config.as_deref() {
+        configs.push(ConfigLoader::load_yaml_file(path)?);
+    }
+
+    let tunnel_config = build_tunnel_config_for_pgsql(p)?;
+    configs.push(Config {
+        service_type: Some(ServiceType::Pgsql),
+        host: p.host.clone(),
+        port: p.port,
+        user: p.user.clone(),
+        password: p.password.clone(),
+        database: p.database.clone(),
+        db: None,
+        key_path: None,
+        tunnel: tunnel_config,
+    });
+
+    Ok(ConfigMerger::merge_multiple(configs))
+}
+
+/// Same shape as the MySQL build_tunnel_config but reads from PgsqlExecParams.
+fn build_tunnel_config_for_pgsql(p: &PgsqlExecParams) -> Result<Option<TunnelConfig>> {
+    let Some(kind) = &p.tunnel else {
+        return Ok(None);
+    };
+    match kind {
+        TunnelKind::Direct => {
+            let stray = p.ssh_jump.is_some()
+                || p.ssh_user.is_some()
+                || p.ssh_password.is_some()
+                || p.ssh_key_path.is_some()
+                || p.ssh_port.is_some();
+            if stray {
+                return Err(Error::Config(
+                    "ssh_* fields are only valid with tunnel = \"ssh\"".to_string(),
+                ));
+            }
+            Ok(Some(TunnelConfig::Direct))
+        }
+        TunnelKind::Ssh => {
+            let jumps = p
+                .ssh_jump
+                .clone()
+                .map(SshJumpInput::into_jumps)
+                .ok_or_else(|| {
+                    Error::Config("ssh_jump is required when tunnel = \"ssh\"".to_string())
+                })?;
+            if jumps.is_empty() {
+                return Err(Error::Config("ssh_jump must not be empty".to_string()));
+            }
+            let ssh_user = p.ssh_user.clone().ok_or_else(|| {
+                Error::Config("ssh_user is required when tunnel = \"ssh\"".to_string())
+            })?;
+            Ok(Some(TunnelConfig::Ssh {
+                ssh_jumps: jumps,
+                ssh_user,
+                ssh_password: p.ssh_password.clone(),
+                ssh_key_path: p.ssh_key_path.clone(),
+                ssh_port: p.ssh_port.unwrap_or(22),
+            }))
+        }
+    }
+}
+
+/// Public entry point for the pgsql_exec tool.
+pub async fn pgsql_exec(params: PgsqlExecParams) -> Result<ExecutionResult> {
+    let query = params.query.clone();
+    let config = pgsql_params_to_config(&params)?;
+    let tunnel = config.tunnel.clone();
+    let req = PgsqlRequest::from_config(config, query)?;
+    PgsqlOrchestrator::execute(req, tunnel).await
+}
+
 /// JSON parameters for the `redis_exec` MCP tool.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct RedisExecParams {
@@ -349,6 +498,153 @@ pub async fn redis_exec(params: RedisExecParams) -> Result<ExecutionResult> {
     let tunnel = config.tunnel.clone();
     let req = RedisRequest::from_config(config, command)?;
     RedisOrchestrator::execute(req, tunnel).await
+}
+
+/// JSON parameters for the `mongo_exec` MCP tool.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct MongoExecParams {
+    /// Mongo command as a JSON object (e.g. `{"find":"users","filter":{}}`).
+    pub command: String,
+
+    /// Mongo host (overrides profile / yaml).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+
+    /// Mongo port (default 27017).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+
+    /// Mongo user (optional — auth is optional).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
+
+    /// Mongo password.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+
+    /// Database name (required for runCommand).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub database: Option<String>,
+
+    /// Profile name from ~/.config/tools-mcp/config.toml.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+
+    /// Path to a YAML config file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<PathBuf>,
+
+    /// Tunnel kind. "direct" (default) or "ssh".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tunnel: Option<TunnelKind>,
+
+    /// SSH jump host(s).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_jump: Option<SshJumpInput>,
+
+    /// SSH jump user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_user: Option<String>,
+
+    /// SSH jump password.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_password: Option<String>,
+
+    /// SSH key path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_key_path: Option<String>,
+
+    /// SSH jump port (default 22).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_port: Option<u16>,
+}
+
+fn mongo_params_to_config(p: &MongoExecParams) -> Result<Config> {
+    let mut configs: Vec<Config> = Vec::new();
+
+    if let Some(profile_name) = &p.profile {
+        let toml_config = ConfigLoader::load_default_toml()?.ok_or_else(|| {
+            Error::Config(format!(
+                "profile '{profile_name}' requested but no ~/.config/tools-mcp/config.toml found"
+            ))
+        })?;
+        let profile_cfg = toml_config.profiles.get(profile_name).ok_or_else(|| {
+            Error::Config(format!("profile '{profile_name}' not found in config.toml"))
+        })?;
+        configs.push(profile_to_config(profile_cfg));
+    }
+
+    if let Some(path) = p.config.as_deref() {
+        configs.push(ConfigLoader::load_yaml_file(path)?);
+    }
+
+    let tunnel_config = build_tunnel_config_for_mongo(p)?;
+    configs.push(Config {
+        service_type: Some(ServiceType::Mongo),
+        host: p.host.clone(),
+        port: p.port,
+        user: p.user.clone(),
+        password: p.password.clone(),
+        database: p.database.clone(),
+        db: None,
+        key_path: None,
+        tunnel: tunnel_config,
+    });
+
+    Ok(ConfigMerger::merge_multiple(configs))
+}
+
+/// Same shape as the Redis build_tunnel_config_for_redis but reads MongoExecParams.
+fn build_tunnel_config_for_mongo(p: &MongoExecParams) -> Result<Option<TunnelConfig>> {
+    let Some(kind) = &p.tunnel else {
+        return Ok(None);
+    };
+    match kind {
+        TunnelKind::Direct => {
+            let stray = p.ssh_jump.is_some()
+                || p.ssh_user.is_some()
+                || p.ssh_password.is_some()
+                || p.ssh_key_path.is_some()
+                || p.ssh_port.is_some();
+            if stray {
+                return Err(Error::Config(
+                    "ssh_* fields are only valid with tunnel = \"ssh\"".to_string(),
+                ));
+            }
+            Ok(Some(TunnelConfig::Direct))
+        }
+        TunnelKind::Ssh => {
+            let jumps = p
+                .ssh_jump
+                .clone()
+                .map(SshJumpInput::into_jumps)
+                .ok_or_else(|| {
+                    Error::Config("ssh_jump is required when tunnel = \"ssh\"".to_string())
+                })?;
+            if jumps.is_empty() {
+                return Err(Error::Config("ssh_jump must not be empty".to_string()));
+            }
+            let ssh_user = p.ssh_user.clone().ok_or_else(|| {
+                Error::Config("ssh_user is required when tunnel = \"ssh\"".to_string())
+            })?;
+            Ok(Some(TunnelConfig::Ssh {
+                ssh_jumps: jumps,
+                ssh_user,
+                ssh_password: p.ssh_password.clone(),
+                ssh_key_path: p.ssh_key_path.clone(),
+                ssh_port: p.ssh_port.unwrap_or(22),
+            }))
+        }
+    }
+}
+
+/// Public entry point for the mongo_exec tool.
+pub async fn mongo_exec(params: MongoExecParams) -> Result<ExecutionResult> {
+    let command = params.command.clone();
+    let config = mongo_params_to_config(&params)?;
+    let tunnel = config.tunnel.clone();
+    let req = MongoRequest::from_config(config, command)?;
+    MongoOrchestrator::execute(req, tunnel).await
 }
 
 /// JSON parameters for the `http_exec` MCP tool.
