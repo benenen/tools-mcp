@@ -1,16 +1,18 @@
 ---
 name: tools-mcp-using
-description: Use when calling any of the four tools-mcp MCP tools (`mysql_exec` / `redis_exec` / `http_exec` / `ssh_exec`). Covers parameter shape per service, three-layer config priority (mysql/redis), SSH tunnel syntax (single + multi-hop), output mapping, destructive-command list, and common error shapes.
+description: Use when calling any of the six tools-mcp MCP tools (`mysql_exec` / `pgsql_exec` / `redis_exec` / `mongo_exec` / `http_exec` / `ssh_exec`). Covers parameter shape per service, three-layer config priority (mysql/pgsql/redis/mongo), SSH tunnel syntax (single + multi-hop), output mapping, destructive-command list, and common error shapes.
 ---
 
 # Using the tools-mcp MCP tools
 
-`tools-mcp` exposes four MCP tools — one per service. All four return a `{columns, rows, affected_rows}` ExecutionResult and accept tunnel fields. MySQL and Redis additionally accept `profile` / `config` for 3-layer config merge; HTTP and SSH-direct take their fields directly.
+`tools-mcp` exposes six MCP tools — one per service. All six return a `{columns, rows, affected_rows}` ExecutionResult and accept tunnel fields. MySQL, PostgreSQL, Redis, and MongoDB additionally accept `profile` / `config` for 3-layer config merge; HTTP and SSH-direct take their fields directly.
 
 | Tool | Required input | Tunnel | Profile/YAML |
 | --- | --- | --- | --- |
 | `mysql_exec` | `query` + `host` + `user` | yes | yes |
+| `pgsql_exec` | `query` + `host` + `user` | yes | yes |
 | `redis_exec` | `command` + `host` | yes | yes |
+| `mongo_exec` | `command` + `host` + `database` | yes | yes |
 | `http_exec` | `method` + `url` | yes | no |
 | `ssh_exec` | `command` + `host` + `user` + (`password` OR `key_path`) | yes | no |
 
@@ -21,9 +23,17 @@ description: Use when calling any of the four tools-mcp MCP tools (`mysql_exec` 
 { "query": "SELECT 1", "profile": "prod", "database": "myapp" }
 { "query": "SELECT 1", "host": "db", "user": "alice", "password": "..." }
 
+// pgsql_exec — same shape as mysql_exec, default port 5432, no `db` field (use `database`)
+{ "query": "SELECT 1", "profile": "prod-pg", "database": "myapp" }
+{ "query": "SELECT 1", "host": "pg", "user": "app", "password": "...", "database": "myapp" }
+
 // redis_exec — `command` parsed via shlex; quoted args supported
 { "command": "GET foo", "host": "redis", "password": "...", "db": 0 }
 { "command": "EVAL \"return 1\" 0", "profile": "prod-cache" }
+
+// mongo_exec — `command` is a JSON OBJECT string (parsed → BSON → run_command)
+{ "command": "{\"find\":\"users\",\"filter\":{\"x\":1}}", "profile": "prod-mongo" }
+{ "command": "{\"insert\":\"events\",\"documents\":[{\"a\":1}]}", "host": "mongo", "database": "analytics" }
 
 // http_exec — no profile/YAML
 { "method": "GET", "url": "https://api.example.com/x" }
@@ -45,7 +55,7 @@ All four tools also accept the same tunnel fields:
 
 `tunnel="direct"` rejects stray `ssh_*` fields with a clear error.
 
-## Three-layer config priority (mysql / redis only)
+## Three-layer config priority (mysql / pgsql / redis / mongo)
 
 Low → high: TOML profile (`~/.config/tools-mcp/config.toml [profiles.<NAME>]`) → YAML file (`config: /path.yaml`) → explicit fields. Each layer fills `Option<...>` fields; later layers overwrite. Use a profile to avoid pasting credentials repeatedly; override per call only what differs (e.g. `database`, `query`).
 
@@ -72,6 +82,10 @@ For **`http_exec`** through SSH: TLS SNI / Host header / cert verification all u
 
 **mysql_exec** — standard `{columns, rows, affected_rows}`. DML returns empty rows + non-zero affected_rows.
 
+**pgsql_exec** — standard `{columns, rows, affected_rows}` like mysql. Type mapping covers bool / int / float / text / date / time / timestamp / timestamptz; uncommon types (json, jsonb, uuid, arrays) render as `<typename>` placeholders.
+
+**mongo_exec** — single `result` row containing the JSON-serialized result Document. For find-style commands the Document has shape `{"cursor": {"firstBatch": [...]}}`. For write commands it has `{"n": ..., "ok": 1}`. Caller parses the JSON string in the row to navigate the response.
+
 **redis_exec** — single `result` column; rows depend on the Redis Value:
 
 | Redis Value | rows |
@@ -88,7 +102,9 @@ For **`http_exec`** through SSH: TLS SNI / Host header / cert verification all u
 ## Destructive commands — confirm with the user FIRST
 
 - **mysql_exec**: any `DROP`, `TRUNCATE`, `DELETE`, `UPDATE` without a `WHERE`, `ALTER`, `GRANT`, `REVOKE`. Treat as a privileged shell.
+- **pgsql_exec**: `DROP`, `TRUNCATE`, `DELETE without WHERE`, `UPDATE without WHERE`, `GRANT`, `REVOKE`, `ALTER`. Same caution as mysql.
 - **redis_exec**: `FLUSHDB`, `FLUSHALL`, `DEL` / `UNLINK` against more than a single named key, `DEBUG FLUSHALL`, `CONFIG SET`, `CLUSTER FORGET` / `MEET`, `RENAME` / `RENAMENX` (silently overwrites). `KEYS *` on prod can block — prefer `SCAN`.
+- **mongo_exec**: `drop` (collection drop), `dropDatabase`, `delete` with broad filter, `update` with `"multi": true` + broad filter, `findAndModify` with `"remove": true`, admin commands `createUser` / `dropUser` / `grantRolesToUser`.
 - **http_exec**: `POST` / `PUT` / `DELETE` / `PATCH`. Watch for missing `data` — user may have typed POST when they meant GET.
 - **ssh_exec**: `rm` / `find ... -delete`, `mv` overwrite, `dd`, `mkfs.*`, `systemctl restart` / `reboot` / `shutdown`, `apt install` / `apt remove`, `kill -9` / `pkill`, anything starting with `sudo`.
 
@@ -96,11 +112,12 @@ Read-only operations (`SELECT`, `GET` / `EXISTS` / `INFO`, `GET` / `HEAD`, `ls` 
 
 ## Common error shapes
 
-- `Error::Config("MySQL host is required")` / `("Redis host is required")` / `("SSH target requires --password or --key-path")` — final merged config missing a required field. Profile wrong, YAML wrong, or fill it in explicitly.
+- `Error::Config("MySQL host is required")` / `("Pgsql host is required")` / `("Pgsql user is required")` / `("Redis host is required")` / `("Mongo host is required")` / `("Mongo database is required")` / `("SSH target requires --password or --key-path")` — final merged config missing a required field. Profile wrong, YAML wrong, or fill it in explicitly.
 - `Error::Config("invalid URL ...")` / `("URL ... uses an unsupported scheme ...")` — http_exec URL parse failure or non-http/https scheme (ftp:// / file://).
-- `Error::Service("MySQL: ...")` / `("Redis: NOAUTH" / "WRONGTYPE" / "MOVED ...")` / `("HTTP: ...")` / `("SSH session open failed")` — service-side error. Read the message for the cause.
+- `Error::Service("MySQL: ...")` / `("Pgsql: ...")` / `("Pgsql query: ...")` / `("Redis: NOAUTH" / "WRONGTYPE" / "MOVED ...")` / `("Mongo: ...")` / `("Mongo run_command: ...")` / `("HTTP: ...")` / `("SSH session open failed")` — service-side error. Read the message for the cause.
 - `Error::Connection("SSH connect ... failed")` / `("SSH publickey/password auth failed")` — wrong creds or unreachable host. For `ssh_exec`: jump creds vs target creds are separate.
 - `Error::Execution("failed to parse Redis command (unbalanced quotes?)")` — shlex parsing failed.
+- `Error::Execution("failed to parse Mongo command as JSON: ...")` / `("failed to convert command JSON to BSON: ...")` / `("Mongo command must be a JSON object")` — mongo_exec command string is not valid JSON, not a JSON object, or cannot be converted to BSON.
 - Any `SSH tunnel ... failed` / multi-hop drop → escalate to `ssh-bastion-checklist`.
 - MySQL-specific (1045 / 1146 / 1062 / deadlock / slow query / processlist) → escalate to `mysql-debugging`.
 

@@ -11,20 +11,22 @@ Unified tool for SSH, MySQL, and Redis connections with MCP (Model Context Proto
 
 ## Status
 
-This is the Phase 8 release. Currently implemented:
+This is the Phase 9 release. Currently implemented:
 
-- All four service orchestrators (`MysqlOrchestrator`, `RedisOrchestrator`, `HttpOrchestrator`, `SshDirectOrchestrator`) impl the `tools_mcp_core::Service` trait, defined as `async fn execute(Self::Request, Option<TunnelConfig>) -> Result<ExecutionResult>`. They live in the `tools-mcp-orchestrator` lib crate.
+- All six service orchestrators (`MysqlOrchestrator`, `PgsqlOrchestrator`, `RedisOrchestrator`, `MongoOrchestrator`, `HttpOrchestrator`, `SshDirectOrchestrator`) impl the `tools_mcp_core::Service` trait, defined as `async fn execute(Self::Request, Option<TunnelConfig>) -> Result<ExecutionResult>`. They live in the `tools-mcp-orchestrator` lib crate.
 - MySQL CLI mode (`tools-mcp mysql "..."`) and `mysql_exec` MCP tool.
+- **PostgreSQL CLI mode** (`tools-mcp pgsql "..."`) and `pgsql_exec` MCP tool.
 - Redis CLI mode (`tools-mcp redis "..."`) and `redis_exec` MCP tool.
+- **MongoDB CLI mode** (`tools-mcp mongo '{"find":"coll","filter":{}}'`) and `mongo_exec` MCP tool — JSON document passed to `Database::run_command`.
 - HTTP CLI mode (`tools-mcp http GET https://...`) and `http_exec` MCP tool.
 - **SSH-direct CLI mode** (`tools-mcp ssh "..."`) and `ssh_exec` MCP tool —
   run a shell command on a target SSH server, optionally through SSH jump hosts.
 - Configuration via YAML file (`--config=PATH`) or TOML profile (`--profile=NAME`)
-  for MySQL and Redis. (HTTP and SSH-direct profile/YAML is Phase 8+.)
+  for MySQL, PostgreSQL, Redis, and MongoDB. (HTTP and SSH-direct profile/YAML not yet supported.)
 - Direct connection (`--tunnel=direct` or no `--tunnel`).
 - SSH tunnel (`--tunnel=ssh`) with single- or multi-hop jump (`--ssh-jump=h1[,h2,...]`),
   password or key auth. Host keys accepted with a fingerprint warning.
-  Works for HTTP and SSH-direct too.
+  Works for all six services.
 - MCP server mode (`tools-mcp` with no subcommand) over stdio.
 
 Not yet implemented:
@@ -53,9 +55,10 @@ Rust toolchain install.
 This repo is a Cargo workspace. The `tools-mcp` binary crate lives at
 the repo root (presentation layer only). The lib crates under `crates/`
 are: `tools-mcp-core` (trait floor + `Service` trait + `TunnelConfig`),
-`tools-mcp-mysql` / `tools-mcp-redis` / `tools-mcp-http` / `tools-mcp-ssh`
-(per-service primitives), and `tools-mcp-orchestrator` (Config/Profile/
-Loader/Merger + Tunnel impls + the four `<Svc>Orchestrator: impl Service`).
+`tools-mcp-mysql` / `tools-mcp-pgsql` / `tools-mcp-redis` / `tools-mcp-mongo` /
+`tools-mcp-http` / `tools-mcp-ssh` (per-service primitives), and
+`tools-mcp-orchestrator` (Config/Profile/Loader/Merger + Tunnel impls +
+the six `<Svc>Orchestrator: impl Service`).
 `cargo build` / `cargo test` from the root build and test all of them.
 
 ## Usage
@@ -80,6 +83,38 @@ tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=se
 tools-mcp --tunnel=ssh --ssh-jump=bastion1.com,bastion2.com --ssh-user=admin \
   --ssh-key-path=~/.ssh/jump_key \
   mysql --host=mysql.internal --user=root --password=dbpass "SELECT 1"
+```
+
+### PostgreSQL
+
+```bash
+# Direct connection
+tools-mcp pgsql "SELECT * FROM users LIMIT 5" --host=localhost --user=postgres --password=secret --database=myapp
+
+# Through an SSH jump
+tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-key-path=~/.ssh/id_rsa \
+  pgsql --host=pg.internal --user=app --password=app_pwd --database=myapp "SELECT NOW()"
+
+# Using a TOML profile
+tools-mcp pgsql "SELECT count(*) FROM events" --profile=prod-postgres
+```
+
+### MongoDB
+
+Mongo commands are JSON documents passed to `Database::run_command`:
+
+```bash
+# find
+tools-mcp mongo '{"find":"users","filter":{"active":true},"limit":5}' \
+  --host=localhost --database=myapp
+
+# insert
+tools-mcp mongo '{"insert":"events","documents":[{"type":"signup","ts":1}]}' \
+  --host=mongo.internal --user=app --password=secret --database=analytics
+
+# Through an SSH jump
+tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=jpwd \
+  mongo '{"listCollections":1}' --host=mongo.internal --database=admin
 ```
 
 ### Redis
@@ -146,10 +181,12 @@ Run `tools-mcp` with no subcommand to start an MCP server over stdio:
 tools-mcp
 ```
 
-It exposes one tool, `mysql_exec`, with the same parameters as the CLI's
-`mysql` subcommand (host/port/user/password/database/profile + tunnel/ssh_*).
-AI clients (Claude Desktop, Cursor, etc.) can call this tool to run MySQL
-queries through SSH jump hosts.
+It exposes six tools (`mysql_exec`, `pgsql_exec`, `redis_exec`, `mongo_exec`,
+`http_exec`, `ssh_exec`) — one per service. Each tool accepts the same
+parameters as the corresponding CLI subcommand plus the shared tunnel fields
+(`tunnel`, `ssh_jump`, `ssh_user`, `ssh_password`, `ssh_key_path`, `ssh_port`).
+AI clients (Claude Desktop, Cursor, etc.) can call these tools to query
+databases and run commands through SSH jump hosts.
 
 Example MCP configuration entry (e.g. for Claude Desktop):
 
@@ -166,7 +203,7 @@ Example MCP configuration entry (e.g. for Claude Desktop):
 ### Use as a Claude Code plugin
 
 This repo ships a Claude Code plugin (`.claude-plugin/plugin.json` +
-`.mcp.json` + `skills/`). Loading the plugin gives Claude the four
+`.mcp.json` + `skills/`). Loading the plugin gives Claude the six
 service MCP tools plus the project-specific skills — all wired up
 automatically.
 
@@ -189,11 +226,13 @@ What the plugin provides:
 
 - **MCP tools** auto-registered via `.mcp.json`:
   - `mysql_exec` — run a MySQL query.
+  - `pgsql_exec` — run a PostgreSQL query.
   - `redis_exec` — run a Redis command.
+  - `mongo_exec` — run a MongoDB command (JSON document to `runCommand`).
   - `http_exec` — send an HTTP request.
   - `ssh_exec` — run a shell command on a remote SSH server.
 - **Skills** that guide the assistant:
-  - `tools-mcp-using` — consolidated guide for all four tools: parameter shape per service, three-layer config priority (mysql + redis), SSH tunnel syntax, output mapping, destructive-command list.
+  - `tools-mcp-using` — consolidated guide for all six tools: parameter shape per service, three-layer config priority (mysql + pgsql + redis + mongo), SSH tunnel syntax, output mapping, destructive-command list.
   - `mysql-debugging` — diagnostic queries for common MySQL errors, locks, slow queries.
   - `ssh-bastion-checklist` — narrows down SSH-tunnel failures.
 
