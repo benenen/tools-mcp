@@ -2,16 +2,13 @@
 //! with optional jump-host chain built from the tunnel config.
 //!
 //! Like HTTP, SSH-direct doesn't have a `from_config` constructor —
-//! Profile/YAML support was deferred (Phase 7 simplification). The bin
-//! builds `SshExecRequest` directly from CLI flags / JSON params and
-//! calls `SshDirectOrchestrator::execute(req, tunnel)`.
-//!
-//! Validation (`req.password` or `req.key_path` must be set) lives in
-//! the orchestrator since there's no `from_config` consolidation point.
+//! Profile/YAML support was deferred. The bin builds `SshExecRequest`
+//! directly from CLI flags / JSON params.
 
+use crate::execute as ssh_execute;
+use crate::request::{SshExecRequest, SshJumpsConfig};
 use async_trait::async_trait;
 use tools4a_core::{Error, ExecutionResult, Result, Service, TunnelConfig};
-use tools4a_ssh::{SshExecRequest, SshJumpsConfig, execute as ssh_execute};
 
 pub struct SshDirectOrchestrator;
 
@@ -66,13 +63,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_execute_errors_without_password_or_key() {
+    async fn execute_errors_without_password_or_key() {
         let err = SshDirectOrchestrator::execute(empty_req(), None)
             .await
             .unwrap_err();
-        assert!(
-            matches!(err, Error::Config(msg) if msg.contains("--password or --key-path")),
-            "expected Config error about missing creds"
-        );
+        assert!(matches!(err, Error::Config(ref msg) if msg.contains("--password or --key-path")));
     }
 }

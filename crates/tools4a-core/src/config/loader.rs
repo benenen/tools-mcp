@@ -1,6 +1,6 @@
 use crate::config::{Config, TomlConfig};
+use crate::{Error, Result};
 use std::path::Path;
-use tools4a_core::{Error, Result};
 
 pub struct ConfigLoader;
 

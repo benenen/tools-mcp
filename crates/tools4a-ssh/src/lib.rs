@@ -1,14 +1,18 @@
-//! SSH session-chain primitives (shared by `tools4a` bin's SshTunnel and
-//! this crate's SshExec) plus a top-level `execute()` function for running
-//! a single shell command on an SSH target, optionally through one or more
-//! jump hosts.
+//! SSH stack: session-chain primitives, the `SshDirectOrchestrator`
+//! `Service` impl, and the `SshMcp` `McpTool` impl. Session helpers
+//! (`AcceptAnyHostKey`, `authenticate`, `build_session_chain`) are
+//! exported so `tools4a-tunnel`'s `SshTunnel` can reuse them.
 
 pub mod exec;
 pub mod execute;
+pub mod mcp;
+pub mod orchestrator;
 pub mod request;
 pub mod session;
 
 pub use exec::{SshExec, SshOutput, output_to_result};
 pub use execute::execute;
+pub use mcp::{SshExecParams, SshMcp};
+pub use orchestrator::SshDirectOrchestrator;
 pub use request::{SshExecRequest, SshJumpsConfig};
 pub use session::{AcceptAnyHostKey, authenticate, build_session_chain};

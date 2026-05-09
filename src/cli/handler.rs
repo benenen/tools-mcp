@@ -1,12 +1,13 @@
 use crate::cli::{Cli, Commands, TunnelKind};
 use crate::output::CliFormatter;
+use tools4a_core::config::{Config, ConfigLoader, ConfigMerger, ServiceType};
 use tools4a_core::{Error, Result, Service, TunnelConfig};
-use tools4a_orchestrator::config::{Config, ConfigLoader, ConfigMerger, ServiceType};
-use tools4a_orchestrator::{
-    HttpAuth, HttpOrchestrator, HttpRequestSpec, MongoOrchestrator, MongoRequest,
-    MysqlOrchestrator, MysqlRequest, PgsqlOrchestrator, PgsqlRequest, RedisOrchestrator,
-    RedisRequest, SshDirectOrchestrator, SshExecRequest,
-};
+use tools4a_http::{HttpAuth, HttpOrchestrator, HttpRequestSpec};
+use tools4a_mongo::{MongoOrchestrator, MongoRequest};
+use tools4a_mysql::{MysqlOrchestrator, MysqlRequest};
+use tools4a_pgsql::{PgsqlOrchestrator, PgsqlRequest};
+use tools4a_redis::{RedisOrchestrator, RedisRequest};
+use tools4a_ssh::{SshDirectOrchestrator, SshExecRequest};
 
 pub struct CliHandler;
 
@@ -248,7 +249,7 @@ impl CliHandler {
         }
     }
 
-    fn profile_to_config(profile: &tools4a_orchestrator::config::Profile) -> Config {
+    fn profile_to_config(profile: &tools4a_core::config::Profile) -> Config {
         Config {
             service_type: Some(profile.service_type.clone()),
             host: profile.host.clone(),

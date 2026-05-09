@@ -1,0 +1,11 @@
+[package]
+name = "tools4a-tunnel"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-trait = "0.1"
+russh = "0.46"
+tokio = { version = "1.40", features = ["full"] }
+tools4a-core = { path = "../tools4a-core" }
+tools4a-ssh = { path = "../tools4a-ssh" }

@@ -1,17 +1,16 @@
 //! HTTP orchestrator: parse URL, build tunnel pointing at it, dispatch
-//! into `tools4a_http::execute`. CLI handler and MCP `http_exec` tool
-//! both delegate here.
+//! into `tools4a_http::execute`.
 //!
-//! Unlike MySQL / Redis orchestrators, HTTP does NOT have a
-//! `from_config` constructor — there's no Profile/YAML support yet
-//! (Phase 6 deferred), so the bin builds `HttpRequestSpec` directly
-//! from CLI flags / JSON params and calls
-//! `HttpOrchestrator::execute(req, tunnel)`.
+//! Unlike MySQL / Pgsql / Mongo orchestrators, HTTP does NOT have a
+//! `from_config` constructor — there's no Profile/YAML support
+//! (deliberately deferred), so the bin builds `HttpRequestSpec` directly
+//! from CLI flags / JSON params.
 
-use crate::tunnel::{DirectTunnel, SshTunnel};
+use crate::execute as http_execute;
+use crate::request::HttpRequestSpec;
 use async_trait::async_trait;
-use tools4a_core::{Error, ExecutionResult, Result, Service, Tunnel, TunnelConfig};
-use tools4a_http::{HttpRequestSpec, execute as http_execute};
+use tools4a_core::{Error, ExecutionResult, Result, Service, TunnelConfig};
+use tools4a_tunnel::build_tunnel;
 
 pub struct HttpOrchestrator;
 
@@ -43,29 +42,7 @@ impl Service for HttpOrchestrator {
             ))
         })?;
 
-        let tunnel: Box<dyn Tunnel> = match tunnel_config {
-            None | Some(TunnelConfig::Direct) => {
-                Box::new(DirectTunnel::new(url_host.clone(), url_port))
-            }
-            Some(TunnelConfig::Ssh {
-                ssh_jumps,
-                ssh_user,
-                ssh_password,
-                ssh_key_path,
-                ssh_port,
-            }) => {
-                let key_path = ssh_key_path.map(std::path::PathBuf::from);
-                Box::new(SshTunnel::new(
-                    ssh_jumps,
-                    ssh_user,
-                    ssh_password,
-                    key_path,
-                    ssh_port,
-                    url_host.clone(),
-                    url_port,
-                )?)
-            }
-        };
+        let tunnel = build_tunnel(url_host.clone(), url_port, tunnel_config)?;
 
         http_execute(tunnel, url_host, url_port, req).await
     }
@@ -74,7 +51,7 @@ impl Service for HttpOrchestrator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tools4a_http::HttpAuth;
+    use crate::request::HttpAuth;
 
     fn empty_req(url: &str) -> HttpRequestSpec {
         HttpRequestSpec {
@@ -92,7 +69,7 @@ mod tests {
         let err = HttpOrchestrator::execute(empty_req("not a url"), None)
             .await
             .unwrap_err();
-        assert!(matches!(err, Error::Config(msg) if msg.contains("invalid URL")));
+        assert!(matches!(err, Error::Config(ref msg) if msg.contains("invalid URL")));
     }
 
     #[tokio::test]
@@ -100,15 +77,14 @@ mod tests {
         let err = HttpOrchestrator::execute(empty_req("ftp://example.com/x"), None)
             .await
             .unwrap_err();
-        assert!(matches!(err, Error::Config(msg) if msg.contains("unsupported scheme")));
+        assert!(matches!(err, Error::Config(ref msg) if msg.contains("unsupported scheme")));
     }
 
     #[tokio::test]
     async fn test_execute_errors_on_file_scheme() {
-        // file:// is parseable but is not http/https.
         let err = HttpOrchestrator::execute(empty_req("file:///tmp/x"), None)
             .await
             .unwrap_err();
-        assert!(matches!(err, Error::Config(msg) if msg.contains("unsupported scheme")));
+        assert!(matches!(err, Error::Config(ref msg) if msg.contains("unsupported scheme")));
     }
 }

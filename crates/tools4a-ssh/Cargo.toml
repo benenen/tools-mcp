@@ -6,6 +6,8 @@ edition = "2024"
 [dependencies]
 async-trait = "0.1"
 russh = "0.46"
+schemars = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.40", features = ["sync", "macros"] }
 tools4a-core = { path = "../tools4a-core" }
 

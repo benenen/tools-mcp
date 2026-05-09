@@ -1,7 +1,17 @@
 //! Core traits and shared types for the tools4a workspace.
 //!
-//! This crate is the dependency floor: only `async-trait` and `serde`.
-//! Service-specific code (MySQL, SSH, etc.) lives in higher crates.
+//! Holds the trait floor (`Tunnel`, `Connection`, `Service`, `McpTool`),
+//! shared error/result types, the `TunnelConfig` enum, and the
+//! Profile/YAML/CLI 3-layer Config types — everything that more than
+//! one leaf service crate needs to agree on. Concrete tunnel impls
+//! live in `tools4a-tunnel`; per-service orchestrator + MCP impls live
+//! in their respective leaf crate (`tools4a-mysql`, `tools4a-pgsql`, …).
+
+pub mod config;
+pub mod mcp;
+pub mod readonly;
+
+pub use mcp::{McpTool, SshJumpInput, TunnelKind, build_tunnel_config};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -98,7 +108,7 @@ impl ExecutionResult {
 // -- TunnelConfig -------------------------------------------------------
 
 /// Tunnel selection plus its parameters. Shared shape across all services.
-/// Runtime impls (DirectTunnel, SshTunnel) live in `tools4a-orchestrator`.
+/// Runtime impls (DirectTunnel, SshTunnel) live in `tools4a-tunnel`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum TunnelConfig {
@@ -141,9 +151,9 @@ where
 // -- Service trait ------------------------------------------------------
 
 /// A service orchestrator: takes a typed request + an optional tunnel
-/// config, returns a structured result. All four bundled services
-/// (MySQL, Redis, HTTP, SSH-direct) implement this in
-/// `tools4a-orchestrator`. CLI/MCP layers build the typed request
+/// config, returns a structured result. Each leaf service crate
+/// (`tools4a-mysql`, `tools4a-pgsql`, …) implements this for its own
+/// `<Svc>Orchestrator` type. CLI/MCP layers build the typed request
 /// (resolving Profile/YAML/CLI args before this point) and dispatch.
 #[async_trait]
 pub trait Service {

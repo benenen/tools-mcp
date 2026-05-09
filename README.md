@@ -13,7 +13,7 @@ Unified tool for SSH, MySQL, and Redis connections with MCP (Model Context Proto
 
 This is the Phase 9 release. Currently implemented:
 
-- All six service orchestrators (`MysqlOrchestrator`, `PgsqlOrchestrator`, `RedisOrchestrator`, `MongoOrchestrator`, `HttpOrchestrator`, `SshDirectOrchestrator`) impl the `tools4a_core::Service` trait, defined as `async fn execute(Self::Request, Option<TunnelConfig>) -> Result<ExecutionResult>`. They live in the `tools4a-orchestrator` lib crate.
+- All six service orchestrators (`MysqlOrchestrator`, `PgsqlOrchestrator`, `RedisOrchestrator`, `MongoOrchestrator`, `HttpOrchestrator`, `SshDirectOrchestrator`) impl the `tools4a_core::Service` trait, defined as `async fn execute(Self::Request, Option<TunnelConfig>) -> Result<ExecutionResult>`. Each lives in its own leaf crate (`tools4a-mysql`, `tools4a-pgsql`, …) alongside the corresponding `<Svc>Mcp` impl of `tools4a_core::McpTool`.
 - MySQL CLI mode (`tools4a mysql "..."`) and `mysql_exec` MCP tool.
 - **PostgreSQL CLI mode** (`tools4a pgsql "..."`) and `pgsql_exec` MCP tool.
 - Redis CLI mode (`tools4a redis "..."`) and `redis_exec` MCP tool.
@@ -54,11 +54,13 @@ Rust toolchain install.
 
 This repo is a Cargo workspace. The `tools4a` binary crate lives at
 the repo root (presentation layer only). The lib crates under `crates/`
-are: `tools4a-core` (trait floor + `Service` trait + `TunnelConfig`),
-`tools4a-mysql` / `tools4a-pgsql` / `tools4a-redis` / `tools4a-mongo` /
-`tools4a-http` / `tools4a-ssh` (per-service primitives), and
-`tools4a-orchestrator` (Config/Profile/Loader/Merger + Tunnel impls +
-the six `<Svc>Orchestrator: impl Service`).
+are: `tools4a-core` (trait floor + `Service` / `McpTool` traits +
+`TunnelConfig` + Config/Profile/Loader/Merger), `tools4a-tunnel`
+(`DirectTunnel` + `SshTunnel` + `build_tunnel` helper), and the six
+leaf service crates `tools4a-mysql` / `tools4a-pgsql` / `tools4a-redis`
+/ `tools4a-mongo` / `tools4a-http` / `tools4a-ssh`. Each leaf crate
+owns its full vertical slice: protocol primitives, the
+`<Svc>Orchestrator: impl Service`, and the `<Svc>Mcp: impl McpTool`.
 `cargo build` / `cargo test` from the root build and test all of them.
 
 ## Usage

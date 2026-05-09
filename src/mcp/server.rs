@@ -1,15 +1,43 @@
-use crate::mcp::tools::{MysqlExecParams, mysql_exec};
+//! rmcp `ServerHandler` glue. Per-service params + dispatch logic live
+//! in each leaf crate's `mcp` module via the `tools4a_core::McpTool`
+//! trait. This file is thin: each `#[tool]`-decorated method just calls
+//! `<Svc>Mcp::invoke(params)` and wraps the result for rmcp.
+
 use rmcp::{
     ServerHandler, ServiceExt,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{CallToolResult, Content, ServerCapabilities, ServerInfo},
     tool, tool_handler, tool_router,
 };
+use tools4a_core::{ExecutionResult, McpTool};
+use tools4a_http::{HttpExecParams, HttpMcp};
+use tools4a_mongo::{MongoExecParams, MongoMcp};
+use tools4a_mysql::{MysqlExecParams, MysqlMcp};
+use tools4a_pgsql::{PgsqlExecParams, PgsqlMcp};
+use tools4a_redis::{RedisExecParams, RedisMcp};
+use tools4a_ssh::{SshExecParams, SshMcp};
 
 #[derive(Debug, Clone)]
 pub struct ToolsMcpServer {
     #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
+}
+
+/// Render an `McpTool::invoke` outcome as an rmcp `CallToolResult`. Same
+/// shape for every service, so the per-service `#[tool]` methods stay
+/// one-liners.
+fn into_call_result(
+    res: tools4a_core::Result<ExecutionResult>,
+) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+    match res {
+        Ok(result) => {
+            let json = serde_json::to_string_pretty(&result).map_err(|e| {
+                rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
+            })?;
+            Ok(CallToolResult::success(vec![Content::text(json)]))
+        }
+        Err(e) => Ok(CallToolResult::error(vec![Content::text(e.to_string())])),
+    }
 }
 
 #[tool_router]
@@ -20,138 +48,64 @@ impl ToolsMcpServer {
         }
     }
 
-    /// Execute a MySQL query, optionally through an SSH tunnel.
     #[tool(
-        description = "Execute a MySQL query, optionally through an SSH jump host. Same connection options as the `tools4a mysql` CLI subcommand."
+        description = "Execute a MySQL query, optionally through an SSH jump host. Reads are allowed by default; writes (INSERT/UPDATE/DELETE/DDL) require allow_write=true. Same connection options as the `tools4a mysql` CLI subcommand."
     )]
     async fn mysql_exec(
         &self,
         Parameters(params): Parameters<MysqlExecParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        match mysql_exec(params).await {
-            Ok(result) => {
-                let json = serde_json::to_string_pretty(&result).map_err(|e| {
-                    rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
-                })?;
-                Ok(CallToolResult::success(vec![Content::text(json)]))
-            }
-            Err(e) => Ok(CallToolResult::error(vec![Content::text(e.to_string())])),
-        }
+        into_call_result(MysqlMcp::invoke(params).await)
     }
 
-    /// Execute a PostgreSQL query, optionally through an SSH tunnel.
     #[tool(
-        description = "Execute a PostgreSQL query, optionally through an SSH jump host. Same connection options as the `tools4a pgsql` CLI subcommand."
+        description = "Execute a PostgreSQL query, optionally through an SSH jump host. Reads are allowed by default; writes require allow_write=true."
     )]
     async fn pgsql_exec(
         &self,
-        Parameters(params): Parameters<crate::mcp::tools::PgsqlExecParams>,
-    ) -> std::result::Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
-        match crate::mcp::tools::pgsql_exec(params).await {
-            Ok(result) => {
-                let json = serde_json::to_string_pretty(&result).map_err(|e| {
-                    rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
-                })?;
-                Ok(rmcp::model::CallToolResult::success(vec![
-                    rmcp::model::Content::text(json),
-                ]))
-            }
-            Err(e) => Ok(rmcp::model::CallToolResult::error(vec![
-                rmcp::model::Content::text(e.to_string()),
-            ])),
-        }
+        Parameters(params): Parameters<PgsqlExecParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(PgsqlMcp::invoke(params).await)
     }
 
-    /// Execute a Redis command, optionally through an SSH tunnel.
     #[tool(
         description = "Execute a Redis command, optionally through an SSH jump host. Same connection options as the `tools4a redis` CLI subcommand."
     )]
     async fn redis_exec(
         &self,
-        Parameters(params): Parameters<crate::mcp::tools::RedisExecParams>,
-    ) -> std::result::Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
-        match crate::mcp::tools::redis_exec(params).await {
-            Ok(result) => {
-                let json = serde_json::to_string_pretty(&result).map_err(|e| {
-                    rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
-                })?;
-                Ok(rmcp::model::CallToolResult::success(vec![
-                    rmcp::model::Content::text(json),
-                ]))
-            }
-            Err(e) => Ok(rmcp::model::CallToolResult::error(vec![
-                rmcp::model::Content::text(e.to_string()),
-            ])),
-        }
+        Parameters(params): Parameters<RedisExecParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(RedisMcp::invoke(params).await)
     }
 
-    /// Execute a MongoDB command, optionally through an SSH tunnel.
     #[tool(
-        description = "Execute a MongoDB command (JSON object passed to runCommand), optionally through an SSH jump host. Same connection options as the `tools4a mongo` CLI subcommand."
+        description = "Execute a MongoDB command (JSON object passed to runCommand), optionally through an SSH jump host. Reads are allowed by default; writes require allow_write=true."
     )]
     async fn mongo_exec(
         &self,
-        Parameters(params): Parameters<crate::mcp::tools::MongoExecParams>,
-    ) -> std::result::Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
-        match crate::mcp::tools::mongo_exec(params).await {
-            Ok(result) => {
-                let json = serde_json::to_string_pretty(&result).map_err(|e| {
-                    rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
-                })?;
-                Ok(rmcp::model::CallToolResult::success(vec![
-                    rmcp::model::Content::text(json),
-                ]))
-            }
-            Err(e) => Ok(rmcp::model::CallToolResult::error(vec![
-                rmcp::model::Content::text(e.to_string()),
-            ])),
-        }
+        Parameters(params): Parameters<MongoExecParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(MongoMcp::invoke(params).await)
     }
 
-    /// Execute an HTTP request, optionally through an SSH tunnel.
     #[tool(
-        description = "Send an HTTP/HTTPS request and return status, headers, and body. Optionally route through an SSH jump host. Same options as the `tools4a http` CLI subcommand."
+        description = "Send an HTTP/HTTPS request and return status, headers, and body. Optionally route through an SSH jump host."
     )]
     async fn http_exec(
         &self,
-        Parameters(params): Parameters<crate::mcp::tools::HttpExecParams>,
-    ) -> std::result::Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
-        match crate::mcp::tools::http_exec(params).await {
-            Ok(result) => {
-                let json = serde_json::to_string_pretty(&result).map_err(|e| {
-                    rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
-                })?;
-                Ok(rmcp::model::CallToolResult::success(vec![
-                    rmcp::model::Content::text(json),
-                ]))
-            }
-            Err(e) => Ok(rmcp::model::CallToolResult::error(vec![
-                rmcp::model::Content::text(e.to_string()),
-            ])),
-        }
+        Parameters(params): Parameters<HttpExecParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(HttpMcp::invoke(params).await)
     }
 
-    /// Run a shell command on an SSH target, optionally through SSH jumps.
     #[tool(
         description = "Execute a shell command on a remote SSH server. Returns exit_code, stdout, and stderr. Optionally route through one or more SSH jump hosts; jump credentials and target credentials are independent."
     )]
     async fn ssh_exec(
         &self,
-        Parameters(params): Parameters<crate::mcp::tools::SshExecParams>,
-    ) -> std::result::Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
-        match crate::mcp::tools::ssh_exec(params).await {
-            Ok(result) => {
-                let json = serde_json::to_string_pretty(&result).map_err(|e| {
-                    rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
-                })?;
-                Ok(rmcp::model::CallToolResult::success(vec![
-                    rmcp::model::Content::text(json),
-                ]))
-            }
-            Err(e) => Ok(rmcp::model::CallToolResult::error(vec![
-                rmcp::model::Content::text(e.to_string()),
-            ])),
-        }
+        Parameters(params): Parameters<SshExecParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(SshMcp::invoke(params).await)
     }
 }
 
@@ -159,10 +113,11 @@ impl ToolsMcpServer {
 impl ServerHandler for ToolsMcpServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
-            "tools4a: MySQL query execution with optional SSH tunneling. \
-                 Use the mysql_exec tool. Connection params can come from a TOML \
-                 profile (~/.config/tools4a/config.toml), a YAML file, or be \
-                 supplied directly in the tool call.",
+            "tools4a: unified MySQL / PostgreSQL / Redis / MongoDB / HTTP / SSH \
+             tools with optional SSH tunneling. Database reads are allowed by \
+             default; writes require allow_write=true. Connection params can \
+             come from a TOML profile (~/.config/tools4a/config.toml), a YAML \
+             file, or be supplied directly in the tool call.",
         )
     }
 }

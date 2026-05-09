@@ -4317,64 +4317,6 @@ dependencies = [
  "tokio",
  "toml",
  "tools4a-core",
- "tools4a-orchestrator",
-]
-
-[[package]]
-name = "tools4a-core"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "serde",
- "serde_yml",
-]
-
-[[package]]
-name = "tools4a-http"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "reqwest",
- "tokio",
- "tools4a-core",
-]
-
-[[package]]
-name = "tools4a-mongo"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "mongodb",
- "serde_json",
- "tokio",
- "tools4a-core",
- "urlencoding",
-]
-
-[[package]]
-name = "tools4a-mysql"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "mysql_async",
- "tokio",
- "tools4a-core",
-]
-
-[[package]]
-name = "tools4a-orchestrator"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "reqwest",
- "russh",
- "serde",
- "serde_json",
- "serde_yml",
- "tempfile",
- "tokio",
- "toml",
- "tools4a-core",
  "tools4a-http",
  "tools4a-mongo",
  "tools4a-mysql",
@@ -4384,14 +4326,72 @@ dependencies = [
 ]
 
 [[package]]
+name = "tools4a-core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "tools4a-http"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "reqwest",
+ "schemars",
+ "serde",
+ "tokio",
+ "tools4a-core",
+ "tools4a-tunnel",
+]
+
+[[package]]
+name = "tools4a-mongo"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "mongodb",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tools4a-core",
+ "tools4a-tunnel",
+ "urlencoding",
+]
+
+[[package]]
+name = "tools4a-mysql"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "mysql_async",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tools4a-core",
+ "tools4a-tunnel",
+]
+
+[[package]]
 name = "tools4a-pgsql"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "schemars",
+ "serde",
  "tokio",
  "tokio-postgres",
  "tools4a-core",
+ "tools4a-tunnel",
 ]
 
 [[package]]
@@ -4400,9 +4400,12 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "redis",
+ "schemars",
+ "serde",
  "shlex",
  "tokio",
  "tools4a-core",
+ "tools4a-tunnel",
  "urlencoding",
 ]
 
@@ -4412,8 +4415,21 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "russh",
+ "schemars",
+ "serde",
  "tokio",
  "tools4a-core",
+]
+
+[[package]]
+name = "tools4a-tunnel"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "russh",
+ "tokio",
+ "tools4a-core",
+ "tools4a-ssh",
 ]
 
 [[package]]

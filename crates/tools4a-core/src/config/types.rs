@@ -1,6 +1,6 @@
+use crate::TunnelConfig;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use tools4a_core::TunnelConfig;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
