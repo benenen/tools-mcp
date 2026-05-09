@@ -6,7 +6,9 @@ use tools_mcp_core::TunnelConfig;
 #[serde(rename_all = "lowercase")]
 pub enum ServiceType {
     Mysql,
+    Pgsql,
     Redis,
+    Mongo,
     Ssh,
     Http,
 }
@@ -17,7 +19,9 @@ impl FromStr for ServiceType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "mysql" => Ok(ServiceType::Mysql),
+            "pgsql" | "postgres" | "postgresql" => Ok(ServiceType::Pgsql),
             "redis" => Ok(ServiceType::Redis),
+            "mongo" | "mongodb" => Ok(ServiceType::Mongo),
             "ssh" => Ok(ServiceType::Ssh),
             "http" => Ok(ServiceType::Http),
             _ => Err(format!("Invalid service type: {}", s)),
@@ -68,7 +72,21 @@ mod tests {
     #[test]
     fn test_service_type_from_str() {
         assert_eq!("mysql".parse::<ServiceType>().unwrap(), ServiceType::Mysql);
+        assert_eq!("pgsql".parse::<ServiceType>().unwrap(), ServiceType::Pgsql);
+        assert_eq!(
+            "postgres".parse::<ServiceType>().unwrap(),
+            ServiceType::Pgsql
+        );
+        assert_eq!(
+            "postgresql".parse::<ServiceType>().unwrap(),
+            ServiceType::Pgsql
+        );
         assert_eq!("redis".parse::<ServiceType>().unwrap(), ServiceType::Redis);
+        assert_eq!("mongo".parse::<ServiceType>().unwrap(), ServiceType::Mongo);
+        assert_eq!(
+            "mongodb".parse::<ServiceType>().unwrap(),
+            ServiceType::Mongo
+        );
         assert_eq!("ssh".parse::<ServiceType>().unwrap(), ServiceType::Ssh);
         assert!("invalid".parse::<ServiceType>().is_err());
     }
