@@ -9,7 +9,6 @@ mysql_async = "0.34"
 schemars = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tools4a-core = { path = "../tools4a-core" }
-tools4a-tunnel = { path = "../tools4a-tunnel" }
 
 [dev-dependencies]
 serde_json = "1.0"

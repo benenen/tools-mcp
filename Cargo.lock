@@ -4330,11 +4330,13 @@ name = "tools4a-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "russh",
  "schemars",
  "serde",
  "serde_json",
  "serde_yml",
  "tempfile",
+ "tokio",
  "toml",
 ]
 
@@ -4348,7 +4350,6 @@ dependencies = [
  "serde",
  "tokio",
  "tools4a-core",
- "tools4a-tunnel",
 ]
 
 [[package]]
@@ -4362,7 +4363,6 @@ dependencies = [
  "serde_json",
  "tokio",
  "tools4a-core",
- "tools4a-tunnel",
  "urlencoding",
 ]
 
@@ -4377,7 +4377,6 @@ dependencies = [
  "serde_json",
  "tokio",
  "tools4a-core",
- "tools4a-tunnel",
 ]
 
 [[package]]
@@ -4391,7 +4390,6 @@ dependencies = [
  "tokio",
  "tokio-postgres",
  "tools4a-core",
- "tools4a-tunnel",
 ]
 
 [[package]]
@@ -4405,7 +4403,6 @@ dependencies = [
  "shlex",
  "tokio",
  "tools4a-core",
- "tools4a-tunnel",
  "urlencoding",
 ]
 
@@ -4419,17 +4416,6 @@ dependencies = [
  "serde",
  "tokio",
  "tools4a-core",
-]
-
-[[package]]
-name = "tools4a-tunnel"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "russh",
- "tokio",
- "tools4a-core",
- "tools4a-ssh",
 ]
 
 [[package]]

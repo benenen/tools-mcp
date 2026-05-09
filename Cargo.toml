@@ -8,7 +8,6 @@ members = [
     "crates/tools4a-pgsql",
     "crates/tools4a-redis",
     "crates/tools4a-ssh",
-    "crates/tools4a-tunnel",
 ]
 
 [package]

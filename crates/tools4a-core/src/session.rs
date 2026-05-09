@@ -1,13 +1,13 @@
-//! SSH session-chain primitives. Used by both `SshTunnel` (in the bin) and
-//! `SshExec` (in this crate) to walk a chain of SSH jump hosts and end up
-//! with one or more authenticated SSH sessions.
+//! SSH session-chain primitives. Used by both `SshTunnel` (in this crate)
+//! and `SshExec` (in `tools4a-ssh`) to walk a chain of SSH jump hosts and
+//! end up with one or more authenticated SSH sessions.
 
+use crate::{Error, Result};
 use async_trait::async_trait;
 use russh::client;
 use russh::keys::key::PublicKey;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tools4a_core::{Error, Result};
 
 /// russh client handler that accepts any server host key but logs a
 /// fingerprint warning to stderr (matching openssh's

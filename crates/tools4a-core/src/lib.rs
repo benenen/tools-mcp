@@ -1,17 +1,21 @@
 //! Core traits and shared types for the tools4a workspace.
 //!
 //! Holds the trait floor (`Tunnel`, `Connection`, `Service`, `McpTool`),
-//! shared error/result types, the `TunnelConfig` enum, and the
-//! Profile/YAML/CLI 3-layer Config types — everything that more than
-//! one leaf service crate needs to agree on. Concrete tunnel impls
-//! live in `tools4a-tunnel`; per-service orchestrator + MCP impls live
-//! in their respective leaf crate (`tools4a-mysql`, `tools4a-pgsql`, …).
+//! shared error/result types, the `TunnelConfig` enum, the
+//! Profile/YAML/CLI 3-layer Config types, the concrete `DirectTunnel`
+//! and `SshTunnel` runtime impls, and the SSH `session` helpers shared
+//! between `SshTunnel` and `tools4a-ssh`'s `SshExec`. Per-service
+//! orchestrator + MCP impls live in their leaf crate (`tools4a-mysql`,
+//! `tools4a-pgsql`, …).
 
 pub mod config;
 pub mod mcp;
 pub mod readonly;
+pub mod session;
+pub mod tunnel;
 
 pub use mcp::{McpTool, SshJumpInput, TunnelKind, build_tunnel_config};
+pub use tunnel::{DirectTunnel, SshTunnel, build_tunnel};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -108,7 +112,8 @@ impl ExecutionResult {
 // -- TunnelConfig -------------------------------------------------------
 
 /// Tunnel selection plus its parameters. Shared shape across all services.
-/// Runtime impls (DirectTunnel, SshTunnel) live in `tools4a-tunnel`.
+/// Runtime impls (`DirectTunnel`, `SshTunnel`) live in this crate's
+/// `tunnel` module.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum TunnelConfig {

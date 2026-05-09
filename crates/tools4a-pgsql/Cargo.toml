@@ -11,7 +11,6 @@ serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.40", features = ["macros", "rt"] }
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4"] }
 tools4a-core = { path = "../tools4a-core" }
-tools4a-tunnel = { path = "../tools4a-tunnel" }
 
 [dev-dependencies]
 tokio = { version = "1.40", features = ["full"] }

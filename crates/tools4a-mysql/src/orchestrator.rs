@@ -8,8 +8,7 @@ use crate::execute::MysqlParams;
 use async_trait::async_trait;
 use tools4a_core::config::Config;
 use tools4a_core::readonly::is_readonly_sql;
-use tools4a_core::{Error, ExecutionResult, Result, Service, TunnelConfig};
-use tools4a_tunnel::build_tunnel;
+use tools4a_core::{Error, ExecutionResult, Result, Service, TunnelConfig, build_tunnel};
 
 #[derive(Debug, Clone)]
 pub struct MysqlRequest {

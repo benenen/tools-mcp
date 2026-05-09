@@ -1,12 +1,12 @@
 //! Tunnel runtime impls + a one-call helper that turns a `TunnelConfig`
-//! into a ready-to-use `Box<dyn Tunnel>`. Lives in its own crate so each
-//! leaf service crate can build a tunnel without needing the
-//! orchestrator (which would create a dependency cycle).
+//! into a ready-to-use `Box<dyn Tunnel>`. Each leaf service crate's
+//! `<Svc>Orchestrator::execute` calls `build_tunnel` to produce the
+//! right tunnel before dispatching to its lib's `execute`.
 
 mod direct;
 mod ssh;
 
-use tools4a_core::{Result, Tunnel, TunnelConfig};
+use crate::{Result, Tunnel, TunnelConfig};
 
 pub use direct::DirectTunnel;
 pub use ssh::SshTunnel;

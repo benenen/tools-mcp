@@ -54,14 +54,15 @@ Rust toolchain install.
 
 This repo is a Cargo workspace. The `tools4a` binary crate lives at
 the repo root (presentation layer only). The lib crates under `crates/`
-are: `tools4a-core` (trait floor + `Service` / `McpTool` traits +
-`TunnelConfig` + Config/Profile/Loader/Merger), `tools4a-tunnel`
-(`DirectTunnel` + `SshTunnel` + `build_tunnel` helper), and the six
-leaf service crates `tools4a-mysql` / `tools4a-pgsql` / `tools4a-redis`
-/ `tools4a-mongo` / `tools4a-http` / `tools4a-ssh`. Each leaf crate
-owns its full vertical slice: protocol primitives, the
-`<Svc>Orchestrator: impl Service`, and the `<Svc>Mcp: impl McpTool`.
-`cargo build` / `cargo test` from the root build and test all of them.
+are: `tools4a-core` (everything shared — trait floor + concrete
+`DirectTunnel` / `SshTunnel` impls + `build_tunnel` + Config/Profile
+/Loader/Merger + SSH `session` chain helpers + `McpTool` trait), and
+the six leaf service crates `tools4a-mysql` / `tools4a-pgsql` /
+`tools4a-redis` / `tools4a-mongo` / `tools4a-http` / `tools4a-ssh`.
+Each leaf crate owns its full vertical slice: protocol primitives,
+the `<Svc>Orchestrator: impl Service`, and the `<Svc>Mcp: impl
+McpTool`. Every leaf depends only on `tools4a-core`. `cargo build`
+/ `cargo test` from the root build and test all of them.
 
 ## Usage
 

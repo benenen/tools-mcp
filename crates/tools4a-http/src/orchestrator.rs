@@ -9,8 +9,7 @@
 use crate::execute as http_execute;
 use crate::request::HttpRequestSpec;
 use async_trait::async_trait;
-use tools4a_core::{Error, ExecutionResult, Result, Service, TunnelConfig};
-use tools4a_tunnel::build_tunnel;
+use tools4a_core::{Error, ExecutionResult, Result, Service, TunnelConfig, build_tunnel};
 
 pub struct HttpOrchestrator;
 

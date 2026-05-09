@@ -1,8 +1,8 @@
+use crate::session::{AcceptAnyHostKey, build_session_chain};
+use crate::{Error, Result, Tunnel, TunnelEndpoint};
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tools4a_core::{Error, Result, Tunnel, TunnelEndpoint};
-use tools4a_ssh::session::{AcceptAnyHostKey, build_session_chain};
 
 /// SSH-jump tunnel. Establishes a chain of SSH sessions through
 /// `ssh_jumps` (in client→target order) and exposes a local TCP

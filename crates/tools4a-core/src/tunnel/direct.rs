@@ -1,5 +1,5 @@
+use crate::{Result, Tunnel, TunnelEndpoint};
 use async_trait::async_trait;
-use tools4a_core::{Result, Tunnel, TunnelEndpoint};
 
 pub struct DirectTunnel {
     target_host: String,

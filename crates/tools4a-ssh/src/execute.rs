@@ -9,7 +9,7 @@ use tools4a_core::{Error, ExecutionResult, Result};
 
 use crate::exec::{SshExec, output_to_result};
 use crate::request::{SshExecRequest, SshJumpsConfig};
-use crate::session::{AcceptAnyHostKey, authenticate, build_session_chain};
+use tools4a_core::session::{AcceptAnyHostKey, authenticate, build_session_chain};
 
 /// Run a single shell command on the SSH target described by `req`,
 /// optionally going through `jumps`. Always tears down the chain via Drop
