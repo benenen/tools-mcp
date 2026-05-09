@@ -193,11 +193,8 @@ What the plugin provides:
   - `http_exec` — send an HTTP request.
   - `ssh_exec` — run a shell command on a remote SSH server.
 - **Skills** that guide the assistant:
-  - `tools-mcp-using` — parameter shape, three-layer config priority, multi-hop syntax (mysql + redis).
+  - `tools-mcp-using` — consolidated guide for all four tools: parameter shape per service, three-layer config priority (mysql + redis), SSH tunnel syntax, output mapping, destructive-command list.
   - `mysql-debugging` — diagnostic queries for common MySQL errors, locks, slow queries.
-  - `redis-using` — Redis command shape, output mapping, destructive-command list.
-  - `http-using` — HTTP tool input, tunnel routing for internal HTTPS, output mapping.
-  - `ssh-using` — SSH-direct target/jump cred separation, output mapping, PTY limits.
   - `ssh-bastion-checklist` — narrows down SSH-tunnel failures.
 
 ### Configuration

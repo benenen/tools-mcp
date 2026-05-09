@@ -1,97 +1,115 @@
 ---
 name: tools-mcp-using
-description: Use when calling the `mysql_exec` MCP tool from the tools-mcp plugin — explains parameter shape, three-layer config priority, SSH tunnel syntax (single + multi-hop), and how to choose between profile / YAML / explicit fields.
+description: Use when calling any of the four tools-mcp MCP tools (`mysql_exec` / `redis_exec` / `http_exec` / `ssh_exec`). Covers parameter shape per service, three-layer config priority (mysql/redis), SSH tunnel syntax (single + multi-hop), output mapping, destructive-command list, and common error shapes.
 ---
 
-# Using the `mysql_exec` MCP tool
+# Using the tools-mcp MCP tools
 
-`tools-mcp` exposes one MCP tool: `mysql_exec`. It runs a single MySQL query and returns the result as a structured JSON object. Same connection options as the CLI.
+`tools-mcp` exposes four MCP tools — one per service. All four return a `{columns, rows, affected_rows}` ExecutionResult and accept tunnel fields. MySQL and Redis additionally accept `profile` / `config` for 3-layer config merge; HTTP and SSH-direct take their fields directly.
 
-## Tool input shape
+| Tool | Required input | Tunnel | Profile/YAML |
+| --- | --- | --- | --- |
+| `mysql_exec` | `query` + `host` + `user` | yes | yes |
+| `redis_exec` | `command` + `host` | yes | yes |
+| `http_exec` | `method` + `url` | yes | no |
+| `ssh_exec` | `command` + `host` + `user` + (`password` OR `key_path`) | yes | no |
+
+## Tool input shapes
 
 ```json
-{
-  "query": "SELECT 1",                  // required
+// mysql_exec
+{ "query": "SELECT 1", "profile": "prod", "database": "myapp" }
+{ "query": "SELECT 1", "host": "db", "user": "alice", "password": "..." }
 
-  // pick one of these connection sources, or layer them (see priority)
-  "profile":  "prod",                   // ~/.config/tools-mcp/config.toml [profiles.prod]
-  "config":   "/path/to/mysql.yaml",    // YAML config file
-  // ...or fill in fields directly:
-  "host":     "db.example.com",
-  "port":     3306,
-  "user":     "alice",
-  "password": "...",
-  "database": "myapp",
+// redis_exec — `command` parsed via shlex; quoted args supported
+{ "command": "GET foo", "host": "redis", "password": "...", "db": 0 }
+{ "command": "EVAL \"return 1\" 0", "profile": "prod-cache" }
 
-  // tunnel (optional; default = direct)
-  "tunnel":       "ssh",                // "direct" | "ssh"
-  "ssh_jump":     "bastion.com",        // string OR comma-separated OR JSON array
-  "ssh_user":     "admin",
-  "ssh_password": "...",
-  "ssh_key_path": "/home/user/.ssh/id_rsa",
-  "ssh_port":     22
-}
+// http_exec — no profile/YAML
+{ "method": "GET", "url": "https://api.example.com/x" }
+{ "method": "POST", "url": "...", "data": "{...}", "json": true, "bearer": "..." }
+{ "method": "GET", "url": "...", "headers": ["X-Trace: abc"], "insecure": true }
+
+// ssh_exec — TARGET creds (user/password/key_path) separate from JUMP creds (ssh_*)
+{ "command": "uptime", "host": "server", "user": "admin", "key_path": "/home/me/.ssh/id_rsa" }
 ```
 
-## Three-layer config priority (low → high)
+All four tools also accept the same tunnel fields:
+```
+"tunnel": "ssh",                  // "direct" (default) | "ssh"
+"ssh_jump": "bastion.com",        // string OR comma-separated OR JSON array
+"ssh_user": "jumper",
+"ssh_password": "...",            // OR ssh_key_path
+"ssh_port": 22
+```
 
-1. **TOML profile** — `~/.config/tools-mcp/config.toml` `[profiles.<NAME>]` when `profile` is set
-2. **YAML file** — when `config` is set
-3. **Explicit fields** in the tool call (highest)
+`tunnel="direct"` rejects stray `ssh_*` fields with a clear error.
 
-Each layer fills in `Option<...>` fields; later layers overwrite earlier. Use this to avoid pasting credentials repeatedly: keep them in a profile, then override only `database` or `query` per call.
+## Three-layer config priority (mysql / redis only)
 
-## Choosing the connection source
+Low → high: TOML profile (`~/.config/tools-mcp/config.toml [profiles.<NAME>]`) → YAML file (`config: /path.yaml`) → explicit fields. Each layer fills `Option<...>` fields; later layers overwrite. Use a profile to avoid pasting credentials repeatedly; override per call only what differs (e.g. `database`, `query`).
 
-- **Have a working profile?** Just pass `{"query": "...", "profile": "prod"}`. Don't repeat host/user/password — that's noise and a leak risk.
-- **Need a one-off override** (e.g. different database)? `{"query": "...", "profile": "prod", "database": "staging"}`.
-- **Ad-hoc connection**? Pass all fields explicitly. Don't invent `profile` names that don't exist.
-- **Running with --tunnel=ssh from CLI today**? Same shape: include `tunnel="ssh"` and the `ssh_*` fields.
+HTTP and SSH-direct have no profile/YAML — pass all fields explicitly.
 
 ## SSH tunnel syntax
 
-Single hop:
 ```json
+// Single hop
 {"tunnel": "ssh", "ssh_jump": "bastion.com", "ssh_user": "admin", "ssh_password": "..."}
-```
 
-Multi-hop (Client → Bastion1 → Bastion2 → Target):
-```json
+// Multi-hop (Client → Bastion1 → Bastion2 → Target)
 {"tunnel": "ssh", "ssh_jump": "b1.com,b2.com", "ssh_user": "admin", "ssh_key_path": "..."}
-```
-or as JSON array:
-```json
-{"tunnel": "ssh", "ssh_jump": ["b1.com", "b2.com"], "ssh_user": "admin", "ssh_key_path": "..."}
+{"tunnel": "ssh", "ssh_jump": ["b1.com", "b2.com"], ...}
 ```
 
-All hops share the same `ssh_user`/`ssh_password`/`ssh_key_path`/`ssh_port`. Per-hop overrides aren't supported yet.
+All hops share the same `ssh_user` / `ssh_password` / `ssh_key_path` / `ssh_port`. Per-hop overrides not supported yet.
 
-`tunnel="direct"` rejects any stray `ssh_*` fields with a clear error — don't pass them unless you're tunneling.
+For **`ssh_exec`** specifically: the TARGET creds (`user`, `password` / `key_path`, `port`) and the JUMP creds (`ssh_*`) are independent. The tool never infers one from the other — supply both even when they happen to be the same.
 
-## Result shape
+For **`http_exec`** through SSH: TLS SNI / Host header / cert verification all use the URL's original hostname; the tunnel only redirects DNS to a local listener. HTTPS-via-tunnel works without TLS surgery.
 
-```json
-{
-  "columns": ["id", "name"],
-  "rows": [["1", "Alice"], ["2", "Bob"]],
-  "affected_rows": 2
-}
-```
+## Output mapping
 
-For DML (INSERT/UPDATE/DELETE), `rows` is empty and `affected_rows` reflects the change count.
+**mysql_exec** — standard `{columns, rows, affected_rows}`. DML returns empty rows + non-zero affected_rows.
 
-## When the tool errors
+**redis_exec** — single `result` column; rows depend on the Redis Value:
 
-- `MySQL host is required` / `MySQL user is required` — final merged config is missing the field. Either the profile is wrong, the YAML is wrong, or you need to fill in the field explicitly.
-- `SSH tunnel ... failed` — escalate to the `ssh-bastion-checklist` skill.
-- `SQL syntax error` / `Table doesn't exist` — escalate to the `mysql-debugging` skill.
+| Redis Value | rows |
+| --- | --- |
+| Nil | empty |
+| Int / BulkString / SimpleString / Okay | 1 row |
+| Array | one row per element (HGETALL flattens to alternating field/value rows) |
+| Map / Set / Push / RESP3-only | 1 row, Debug-formatted (known limitation) |
 
-## Read vs. write
+**http_exec** — flat `field`/`value` rows: `status_code`, `status`, `header.<name>` (one per response header), `body`. Body is UTF-8 if possible, else `<N bytes (non-UTF-8 body)>`. When showing to the user: default to printing just the `body` row; print the whole table only if the user asked for headers or for debugging.
 
-`mysql_exec` runs ANY SQL — `DROP`, `TRUNCATE`, `DELETE`, etc. all execute. **Before running a destructive statement, confirm with the user.** Treat the tool as you would a `mysql` shell open as a privileged user.
+**ssh_exec** — three rows: `exit_code` (`0` = success; `<unknown>` if channel closed without exit status, treat as failure), `stdout`, `stderr`.
+
+## Destructive commands — confirm with the user FIRST
+
+- **mysql_exec**: any `DROP`, `TRUNCATE`, `DELETE`, `UPDATE` without a `WHERE`, `ALTER`, `GRANT`, `REVOKE`. Treat as a privileged shell.
+- **redis_exec**: `FLUSHDB`, `FLUSHALL`, `DEL` / `UNLINK` against more than a single named key, `DEBUG FLUSHALL`, `CONFIG SET`, `CLUSTER FORGET` / `MEET`, `RENAME` / `RENAMENX` (silently overwrites). `KEYS *` on prod can block — prefer `SCAN`.
+- **http_exec**: `POST` / `PUT` / `DELETE` / `PATCH`. Watch for missing `data` — user may have typed POST when they meant GET.
+- **ssh_exec**: `rm` / `find ... -delete`, `mv` overwrite, `dd`, `mkfs.*`, `systemctl restart` / `reboot` / `shutdown`, `apt install` / `apt remove`, `kill -9` / `pkill`, anything starting with `sudo`.
+
+Read-only operations (`SELECT`, `GET` / `EXISTS` / `INFO`, `GET` / `HEAD`, `ls` / `cat` / `df` / `ps` / `systemctl status` / `journalctl`) are safe to run without a confirmation prompt.
+
+## Common error shapes
+
+- `Error::Config("MySQL host is required")` / `("Redis host is required")` / `("SSH target requires --password or --key-path")` — final merged config missing a required field. Profile wrong, YAML wrong, or fill it in explicitly.
+- `Error::Config("invalid URL ...")` / `("URL ... uses an unsupported scheme ...")` — http_exec URL parse failure or non-http/https scheme (ftp:// / file://).
+- `Error::Service("MySQL: ...")` / `("Redis: NOAUTH" / "WRONGTYPE" / "MOVED ...")` / `("HTTP: ...")` / `("SSH session open failed")` — service-side error. Read the message for the cause.
+- `Error::Connection("SSH connect ... failed")` / `("SSH publickey/password auth failed")` — wrong creds or unreachable host. For `ssh_exec`: jump creds vs target creds are separate.
+- `Error::Execution("failed to parse Redis command (unbalanced quotes?)")` — shlex parsing failed.
+- Any `SSH tunnel ... failed` / multi-hop drop → escalate to `ssh-bastion-checklist`.
+- MySQL-specific (1045 / 1146 / 1062 / deadlock / slow query / processlist) → escalate to `mysql-debugging`.
+
+## PTY / TTY limitation (ssh_exec)
+
+`ssh_exec` does NOT allocate a PTY. Commands needing a TTY (`top`, `htop`, `vim`, `passwd`, anything calling `isatty(stdin)`) will fail or behave unexpectedly. Use non-interactive variants (`top -bn1`, etc.) or wrap in `bash -c '...'`.
 
 ## What this skill is NOT
 
-- Not a debugging skill — see `mysql-debugging`.
-- Not an SSH troubleshooting skill — see `ssh-bastion-checklist`.
-- Not for redis/ssh-direct/MCP-resource calls — those don't exist yet.
+- Not a tutorial on each service — assume the user knows the SQL / Redis / shell command they want.
+- Not for streaming / WebSocket / SSE / SCP/SFTP / Redis cluster routing / pub-sub / scripting orchestration (future phases).
+- Not a debugging skill — see `mysql-debugging` for MySQL diagnostics, `ssh-bastion-checklist` for SSH tunnel troubleshooting.
