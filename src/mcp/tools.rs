@@ -18,6 +18,12 @@ pub struct MysqlExecParams {
     /// SQL query to execute.
     pub query: String,
 
+    /// Allow write operations (INSERT/UPDATE/DELETE/DDL). Default false.
+    /// When false, the orchestrator rejects non-SELECT queries AND the
+    /// session runs in TRANSACTION READ ONLY.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub allow_write: bool,
+
     /// MySQL host (overrides profile / yaml).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,
@@ -202,9 +208,11 @@ fn build_tunnel_config(p: &MysqlExecParams) -> Result<Option<TunnelConfig>> {
 /// result out. The MCP server wraps this with JSON-RPC plumbing.
 pub async fn mysql_exec(params: MysqlExecParams) -> Result<ExecutionResult> {
     let query = params.query.clone();
+    let allow_write = params.allow_write;
     let config = params_to_config(&params)?;
     let tunnel = config.tunnel.clone();
-    let req = MysqlRequest::from_config(config, query)?;
+    let mut req = MysqlRequest::from_config(config, query)?;
+    req.allow_write = allow_write;
     MysqlOrchestrator::execute(req, tunnel).await
 }
 
@@ -214,6 +222,11 @@ pub async fn mysql_exec(params: MysqlExecParams) -> Result<ExecutionResult> {
 pub struct PgsqlExecParams {
     /// SQL query to execute.
     pub query: String,
+
+    /// Allow write operations. Default false. When false the session
+    /// also runs with `default_transaction_read_only = on`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub allow_write: bool,
 
     /// Pgsql host (overrides profile / yaml).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -350,9 +363,11 @@ fn build_tunnel_config_for_pgsql(p: &PgsqlExecParams) -> Result<Option<TunnelCon
 /// Public entry point for the pgsql_exec tool.
 pub async fn pgsql_exec(params: PgsqlExecParams) -> Result<ExecutionResult> {
     let query = params.query.clone();
+    let allow_write = params.allow_write;
     let config = pgsql_params_to_config(&params)?;
     let tunnel = config.tunnel.clone();
-    let req = PgsqlRequest::from_config(config, query)?;
+    let mut req = PgsqlRequest::from_config(config, query)?;
+    req.allow_write = allow_write;
     PgsqlOrchestrator::execute(req, tunnel).await
 }
 
@@ -506,6 +521,12 @@ pub struct MongoExecParams {
     /// Mongo command as a JSON object (e.g. `{"find":"users","filter":{}}`).
     pub command: String,
 
+    /// Allow write commands (insert/update/delete/drop/findAndModify/
+    /// aggregate-with-$out etc.). Default false. Mongo has no per-session
+    /// read-only mode, so this is the only guard.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub allow_write: bool,
+
     /// Mongo host (overrides profile / yaml).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,
@@ -641,9 +662,11 @@ fn build_tunnel_config_for_mongo(p: &MongoExecParams) -> Result<Option<TunnelCon
 /// Public entry point for the mongo_exec tool.
 pub async fn mongo_exec(params: MongoExecParams) -> Result<ExecutionResult> {
     let command = params.command.clone();
+    let allow_write = params.allow_write;
     let config = mongo_params_to_config(&params)?;
     let tunnel = config.tunnel.clone();
-    let req = MongoRequest::from_config(config, command)?;
+    let mut req = MongoRequest::from_config(config, command)?;
+    req.allow_write = allow_write;
     MongoOrchestrator::execute(req, tunnel).await
 }
 
@@ -951,6 +974,7 @@ mod tests {
     fn empty_params() -> MysqlExecParams {
         MysqlExecParams {
             query: "SELECT 1".to_string(),
+            allow_write: false,
             host: None,
             port: None,
             user: None,
@@ -1035,6 +1059,14 @@ mod tests {
         };
         let err = params_to_config(&p).unwrap_err();
         assert!(matches!(err, Error::Config(msg) if msg.contains("ssh_jump")));
+    }
+
+    #[test]
+    fn test_mysql_allow_write_default_false_via_serde() {
+        // allow_write should default to false when omitted in JSON.
+        let p: MysqlExecParams =
+            serde_json::from_value(serde_json::json!({"query": "SELECT 1"})).unwrap();
+        assert!(!p.allow_write);
     }
 
     #[test]

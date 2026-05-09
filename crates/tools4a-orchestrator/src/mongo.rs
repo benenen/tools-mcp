@@ -2,6 +2,7 @@
 //! the right tunnel built from the request's tunnel config.
 
 use crate::config::Config;
+use crate::readonly::is_readonly_mongo;
 use crate::tunnel::{DirectTunnel, SshTunnel};
 use async_trait::async_trait;
 use tools4a_core::{Error, ExecutionResult, Result, Service, Tunnel, TunnelConfig};
@@ -17,6 +18,11 @@ pub struct MongoRequest {
     pub password: Option<String>,
     pub database: String,
     pub command: String,
+    /// When false (default), only read-only commands (find / count /
+    /// aggregate without `$out`/`$merge` / etc.) are accepted. Mongo
+    /// has no per-session read-only mode, so this orchestrator-level
+    /// check is the only guard.
+    pub allow_write: bool,
 }
 
 impl MongoRequest {
@@ -27,6 +33,7 @@ impl MongoRequest {
     /// Mongo auth is optional — neither `config.user` nor
     /// `config.password` is required at construction time (the server
     /// may reject unauthenticated commands at runtime).
+    /// `allow_write` defaults to false; callers opt in explicitly.
     pub fn from_config(config: Config, command: String) -> Result<Self> {
         let host = config
             .host
@@ -43,6 +50,7 @@ impl MongoRequest {
             password: config.password,
             database,
             command,
+            allow_write: false,
         })
     }
 }
@@ -57,6 +65,14 @@ impl Service for MongoOrchestrator {
         req: MongoRequest,
         tunnel_config: Option<TunnelConfig>,
     ) -> Result<ExecutionResult> {
+        if !req.allow_write && !is_readonly_mongo(&req.command) {
+            return Err(Error::Service(
+                "write operation not allowed without --allow-write \
+                 (CLI) / allow_write=true (MCP)"
+                    .to_string(),
+            ));
+        }
+
         let tunnel: Box<dyn Tunnel> = match tunnel_config {
             None | Some(TunnelConfig::Direct) => {
                 Box::new(DirectTunnel::new(req.host.clone(), req.port))
@@ -145,5 +161,24 @@ mod tests {
         assert_eq!(req.port, 27017);
         assert!(req.user.is_none());
         assert!(req.password.is_none());
+        assert!(!req.allow_write);
+    }
+
+    #[tokio::test]
+    async fn test_execute_rejects_write_without_allow_write() {
+        let req = MongoRequest {
+            host: "127.0.0.1".to_string(),
+            port: 27017,
+            user: None,
+            password: None,
+            database: "test".to_string(),
+            command: r#"{"insert":"t","documents":[{"x":1}]}"#.to_string(),
+            allow_write: false,
+        };
+        let err = MongoOrchestrator::execute(req, None).await.unwrap_err();
+        assert!(
+            matches!(err, Error::Service(ref msg) if msg.contains("--allow-write")),
+            "expected --allow-write hint, got {err:?}"
+        );
     }
 }

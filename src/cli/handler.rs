@@ -21,6 +21,7 @@ impl CliHandler {
                 password,
                 database,
                 profile,
+                allow_write,
             }) => {
                 let config = Self::build_config(
                     &cli,
@@ -34,7 +35,7 @@ impl CliHandler {
                     profile,
                 )?;
 
-                Self::execute_mysql(&query, config).await
+                Self::execute_mysql(&query, config, allow_write).await
             }
             Some(Commands::Pgsql {
                 query,
@@ -44,6 +45,7 @@ impl CliHandler {
                 password,
                 database,
                 profile,
+                allow_write,
             }) => {
                 let config = Self::build_config(
                     &cli,
@@ -56,7 +58,7 @@ impl CliHandler {
                     None, // key_path is not a Pgsql flag
                     profile,
                 )?;
-                Self::execute_pgsql(&query, config).await
+                Self::execute_pgsql(&query, config, allow_write).await
             }
             Some(Commands::Redis {
                 command,
@@ -77,6 +79,7 @@ impl CliHandler {
                 password,
                 database,
                 profile,
+                allow_write,
             }) => {
                 let config = Self::build_config(
                     &cli,
@@ -89,7 +92,7 @@ impl CliHandler {
                     None,
                     profile,
                 )?;
-                Self::execute_mongo(&command, config).await
+                Self::execute_mongo(&command, config, allow_write).await
             }
             Some(Commands::Http {
                 method,
@@ -259,27 +262,30 @@ impl CliHandler {
         }
     }
 
-    async fn execute_mysql(query: &str, config: Config) -> Result<()> {
+    async fn execute_mysql(query: &str, config: Config, allow_write: bool) -> Result<()> {
         let tunnel = config.tunnel.clone();
-        let req = MysqlRequest::from_config(config, query.to_string())?;
+        let mut req = MysqlRequest::from_config(config, query.to_string())?;
+        req.allow_write = allow_write;
         let result = MysqlOrchestrator::execute(req, tunnel).await?;
         let output = CliFormatter::format(&result);
         println!("{output}");
         Ok(())
     }
 
-    async fn execute_pgsql(query: &str, config: Config) -> Result<()> {
+    async fn execute_pgsql(query: &str, config: Config, allow_write: bool) -> Result<()> {
         let tunnel = config.tunnel.clone();
-        let req = PgsqlRequest::from_config(config, query.to_string())?;
+        let mut req = PgsqlRequest::from_config(config, query.to_string())?;
+        req.allow_write = allow_write;
         let result = PgsqlOrchestrator::execute(req, tunnel).await?;
         let output = CliFormatter::format(&result);
         println!("{output}");
         Ok(())
     }
 
-    async fn execute_mongo(command: &str, config: Config) -> Result<()> {
+    async fn execute_mongo(command: &str, config: Config, allow_write: bool) -> Result<()> {
         let tunnel = config.tunnel.clone();
-        let req = MongoRequest::from_config(config, command.to_string())?;
+        let mut req = MongoRequest::from_config(config, command.to_string())?;
+        req.allow_write = allow_write;
         let result = MongoOrchestrator::execute(req, tunnel).await?;
         let output = CliFormatter::format(&result);
         println!("{output}");

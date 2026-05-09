@@ -19,7 +19,12 @@ pub async fn execute(
     command_str: &str,
 ) -> Result<ExecutionResult> {
     let mut conn = MongoConnection::new(tunnel, params.user, params.password, params.database);
-    let exec_result = MongoExecutor::execute(&mut conn, command_str).await;
+    let exec_result = run(&mut conn, command_str).await;
     let _ = conn.disconnect().await;
     exec_result
+}
+
+async fn run(conn: &mut MongoConnection, command_str: &str) -> Result<ExecutionResult> {
+    conn.connect().await?;
+    MongoExecutor::execute(conn, command_str).await
 }

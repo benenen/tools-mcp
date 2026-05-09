@@ -8,6 +8,7 @@ pub mod http;
 pub mod mongo;
 pub mod mysql;
 pub mod pgsql;
+pub mod readonly;
 pub mod redis;
 pub mod ssh;
 pub mod tunnel;

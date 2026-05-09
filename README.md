@@ -63,11 +63,37 @@ the six `<Svc>Orchestrator: impl Service`).
 
 ## Usage
 
+### Read-only by default (mysql, pgsql, mongo)
+
+The `mysql`, `pgsql`, and `mongo` subcommands (and their MCP equivalents)
+**reject write operations by default**. Use `--allow-write`
+(`allow_write: true` in MCP) to opt in.
+
+| Service | Reads (always allowed)                    | Writes (need `--allow-write`)                                 |
+| ------- | ----------------------------------------- | ------------------------------------------------------------- |
+| mysql   | `SELECT`, `SHOW`, `EXPLAIN`, `DESCRIBE`, `WITH`, `VALUES`, `TABLE` | `INSERT`, `UPDATE`, `DELETE`, `REPLACE`, `CREATE`, `DROP`, `ALTER`, `TRUNCATE`, `GRANT`, `CALL`, `SET`, … |
+| pgsql   | same as mysql                             | same as mysql, plus `COPY`, `VACUUM`, `ANALYZE`, etc.         |
+| mongo   | `find`, `aggregate` (no `$out`/`$merge`), `count`, `distinct`, `listCollections`, `listDatabases`, `listIndexes`, `dbStats`, `collStats`, `serverStatus`, `ping`, `hello`, `buildInfo`, `getParameter`, … | `insert`, `update`, `delete`, `findAndModify`, `drop`, `create`, `createIndexes`, `aggregate` with `$out` / `$merge`, … |
+
+For mysql + pgsql, when `--allow-write` is **not** set, the session is
+also forced into a DB-level read-only mode (`SET SESSION TRANSACTION
+READ ONLY` / `SET default_transaction_read_only = on`) as a second line
+of defense — so a misclassified write will still be rejected by the
+database itself. Mongo has no per-session read-only mode, so the
+orchestrator-level command whitelist is the only guard.
+
+Redis, HTTP, and SSH are **not** restricted — they accept any command
+without `--allow-write`.
+
 ### MySQL
 
 ```bash
-# Direct connection
+# Direct connection (read-only by default)
 tools4a mysql "SELECT * FROM users" --host=localhost --user=root --password=secret
+
+# Write — requires --allow-write
+tools4a mysql "INSERT INTO users (name) VALUES ('alice')" \
+  --host=localhost --user=root --password=secret --allow-write
 
 # Using YAML config
 tools4a --config=mysql.yaml mysql "SELECT * FROM users"
@@ -88,8 +114,12 @@ tools4a --tunnel=ssh --ssh-jump=bastion1.com,bastion2.com --ssh-user=admin \
 ### PostgreSQL
 
 ```bash
-# Direct connection
+# Direct connection (read-only)
 tools4a pgsql "SELECT * FROM users LIMIT 5" --host=localhost --user=postgres --password=secret --database=myapp
+
+# Write — requires --allow-write
+tools4a pgsql "DELETE FROM events WHERE created_at < now() - interval '30 days'" \
+  --host=localhost --user=postgres --password=secret --database=myapp --allow-write
 
 # Through an SSH jump
 tools4a --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-key-path=~/.ssh/id_rsa \
@@ -104,13 +134,14 @@ tools4a pgsql "SELECT count(*) FROM events" --profile=prod-postgres
 Mongo commands are JSON documents passed to `Database::run_command`:
 
 ```bash
-# find
+# find (read — works without --allow-write)
 tools4a mongo '{"find":"users","filter":{"active":true},"limit":5}' \
   --host=localhost --database=myapp
 
-# insert
+# insert (write — requires --allow-write)
 tools4a mongo '{"insert":"events","documents":[{"type":"signup","ts":1}]}' \
-  --host=mongo.internal --user=app --password=secret --database=analytics
+  --host=mongo.internal --user=app --password=secret --database=analytics \
+  --allow-write
 
 # Through an SSH jump
 tools4a --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=jpwd \

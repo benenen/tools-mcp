@@ -99,7 +99,35 @@ For **`http_exec`** through SSH: TLS SNI / Host header / cert verification all u
 
 **ssh_exec** — three rows: `exit_code` (`0` = success; `<unknown>` if channel closed without exit status, treat as failure), `stdout`, `stderr`.
 
+## Write gating (`allow_write`) — mysql_exec / pgsql_exec / mongo_exec
+
+These three tools are **read-only by default**. Any write attempt is
+rejected upfront with `Error::Service("write operation not allowed
+without --allow-write (CLI) / allow_write=true (MCP)")`. Pass
+`allow_write: true` in the MCP params to enable writes.
+
+- **mysql_exec / pgsql_exec**: read-only first-keyword whitelist is
+  `SELECT`, `SHOW`, `EXPLAIN`, `DESCRIBE` / `DESC`, `WITH`, `VALUES`,
+  `TABLE`, `USE`. Anything else (INSERT/UPDATE/DELETE/DDL/etc.) needs
+  `allow_write: true`. As a second line of defense, when
+  `allow_write=false` the SQL session is forced into DB-level read-only
+  (`SET SESSION TRANSACTION READ ONLY` for MySQL, `SET
+  default_transaction_read_only = on` for Postgres).
+- **mongo_exec**: read-only commands are `find`, `aggregate` (without
+  `$out`/`$merge` stages), `count`, `distinct`, `listCollections`,
+  `listDatabases`, `listIndexes`, `dbStats`, `collStats`,
+  `serverStatus`, `ping`, `hello`, `buildInfo`, `getParameter`, etc.
+  Writes (`insert`, `update`, `delete`, `findAndModify`, `drop`,
+  `create`, `createIndexes`, aggregate-with-`$out`/`$merge`) need
+  `allow_write: true`. Mongo has no per-session read-only mode, so the
+  command whitelist is the only guard.
+- **redis_exec / http_exec / ssh_exec**: NOT gated. They accept any
+  command/method without `allow_write`.
+
 ## Destructive commands — confirm with the user FIRST
+
+When `allow_write: true` is being passed (or for non-gated services),
+still confirm before running anything destructive:
 
 - **mysql_exec**: any `DROP`, `TRUNCATE`, `DELETE`, `UPDATE` without a `WHERE`, `ALTER`, `GRANT`, `REVOKE`. Treat as a privileged shell.
 - **pgsql_exec**: `DROP`, `TRUNCATE`, `DELETE without WHERE`, `UPDATE without WHERE`, `GRANT`, `REVOKE`, `ALTER`. Same caution as mysql.

@@ -99,6 +99,12 @@ pub enum Commands {
         /// Profile name from config
         #[arg(long, help_heading = "MySQL")]
         profile: Option<String>,
+
+        /// Allow write operations (INSERT/UPDATE/DELETE/DDL). Off by
+        /// default; the session also runs in TRANSACTION READ ONLY mode
+        /// unless this is set.
+        #[arg(long = "allow-write", help_heading = "MySQL")]
+        allow_write: bool,
     },
 
     /// Execute a PostgreSQL query
@@ -131,6 +137,11 @@ pub enum Commands {
         /// Profile name from config
         #[arg(long, help_heading = "Pgsql")]
         profile: Option<String>,
+
+        /// Allow write operations. Off by default; the session also runs
+        /// with `default_transaction_read_only = on` unless this is set.
+        #[arg(long = "allow-write", help_heading = "Pgsql")]
+        allow_write: bool,
     },
 
     /// Execute a Redis command
@@ -191,6 +202,12 @@ pub enum Commands {
         /// Profile name from config
         #[arg(long, help_heading = "Mongo")]
         profile: Option<String>,
+
+        /// Allow write commands (insert/update/delete/drop/findAndModify/
+        /// aggregate-with-$out etc.). Off by default — Mongo has no
+        /// per-session read-only mode, so this is the only guard.
+        #[arg(long = "allow-write", help_heading = "Mongo")]
+        allow_write: bool,
     },
 
     /// Execute an HTTP request
