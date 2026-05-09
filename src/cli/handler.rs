@@ -1,8 +1,8 @@
 use crate::cli::{Cli, Commands, TunnelKind};
 use crate::output::CliFormatter;
-use tools_mcp_core::{Error, Result, Service, TunnelConfig};
-use tools_mcp_orchestrator::config::{Config, ConfigLoader, ConfigMerger, ServiceType};
-use tools_mcp_orchestrator::{
+use tools4a_core::{Error, Result, Service, TunnelConfig};
+use tools4a_orchestrator::config::{Config, ConfigLoader, ConfigMerger, ServiceType};
+use tools4a_orchestrator::{
     HttpAuth, HttpOrchestrator, HttpRequestSpec, MongoOrchestrator, MongoRequest,
     MysqlOrchestrator, MysqlRequest, PgsqlOrchestrator, PgsqlRequest, RedisOrchestrator,
     RedisRequest, SshDirectOrchestrator, SshExecRequest,
@@ -159,7 +159,7 @@ impl CliHandler {
     ) -> Result<Config> {
         let mut configs: Vec<Config> = Vec::new();
 
-        // 1. Default TOML profile (if --profile=NAME and ~/.config/tools-mcp/config.toml exists)
+        // 1. Default TOML profile (if --profile=NAME and ~/.config/tools4a/config.toml exists)
         if let Some(profile_name) = &profile {
             if let Some(toml_config) = ConfigLoader::load_default_toml()? {
                 let profile_cfg = toml_config.profiles.get(profile_name).ok_or_else(|| {
@@ -171,7 +171,7 @@ impl CliHandler {
                 configs.push(Self::profile_to_config(profile_cfg));
             } else {
                 return Err(Error::Config(format!(
-                    "profile '{}' requested but no ~/.config/tools-mcp/config.toml found",
+                    "profile '{}' requested but no ~/.config/tools4a/config.toml found",
                     profile_name
                 )));
             }
@@ -245,7 +245,7 @@ impl CliHandler {
         }
     }
 
-    fn profile_to_config(profile: &tools_mcp_orchestrator::config::Profile) -> Config {
+    fn profile_to_config(profile: &tools4a_orchestrator::config::Profile) -> Config {
         Config {
             service_type: Some(profile.service_type.clone()),
             host: profile.host.clone(),
@@ -304,7 +304,7 @@ impl CliHandler {
                 configs.push(Self::profile_to_config(profile_cfg));
             } else {
                 return Err(Error::Config(format!(
-                    "profile '{profile_name}' requested but no ~/.config/tools-mcp/config.toml found"
+                    "profile '{profile_name}' requested but no ~/.config/tools4a/config.toml found"
                 )));
             }
         }

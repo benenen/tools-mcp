@@ -1,6 +1,6 @@
 use std::fs;
 use tempfile::TempDir;
-use tools_mcp_orchestrator::config::{ConfigLoader, ServiceType};
+use tools4a_orchestrator::config::{ConfigLoader, ServiceType};
 
 #[test]
 fn test_load_yaml_config() {

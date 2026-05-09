@@ -1,27 +1,27 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/tools-mcp-core",
-    "crates/tools-mcp-http",
-    "crates/tools-mcp-mongo",
-    "crates/tools-mcp-mysql",
-    "crates/tools-mcp-orchestrator",
-    "crates/tools-mcp-pgsql",
-    "crates/tools-mcp-redis",
-    "crates/tools-mcp-ssh",
+    "crates/tools4a-core",
+    "crates/tools4a-http",
+    "crates/tools4a-mongo",
+    "crates/tools4a-mysql",
+    "crates/tools4a-orchestrator",
+    "crates/tools4a-pgsql",
+    "crates/tools4a-redis",
+    "crates/tools4a-ssh",
 ]
 
 [package]
-name = "tools-mcp"
+name = "tools4a"
 version = "0.1.0"
 edition = "2024"
 
 [[bin]]
-name = "tools-mcp"
+name = "tools4a"
 path = "src/main.rs"
 
 [lib]
-name = "tools_mcp"
+name = "tools4a"
 path = "src/lib.rs"
 
 [dependencies]
@@ -34,8 +34,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yml = "0.0.12"
 tokio = { version = "1.40", features = ["full"] }
-tools-mcp-core = { path = "crates/tools-mcp-core" }
-tools-mcp-orchestrator = { path = "crates/tools-mcp-orchestrator" }
+tools4a-core = { path = "crates/tools4a-core" }
+tools4a-orchestrator = { path = "crates/tools4a-orchestrator" }
 toml = "0.8"
 
 [dev-dependencies]

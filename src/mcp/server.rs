@@ -22,7 +22,7 @@ impl ToolsMcpServer {
 
     /// Execute a MySQL query, optionally through an SSH tunnel.
     #[tool(
-        description = "Execute a MySQL query, optionally through an SSH jump host. Same connection options as the `tools-mcp mysql` CLI subcommand."
+        description = "Execute a MySQL query, optionally through an SSH jump host. Same connection options as the `tools4a mysql` CLI subcommand."
     )]
     async fn mysql_exec(
         &self,
@@ -41,7 +41,7 @@ impl ToolsMcpServer {
 
     /// Execute a PostgreSQL query, optionally through an SSH tunnel.
     #[tool(
-        description = "Execute a PostgreSQL query, optionally through an SSH jump host. Same connection options as the `tools-mcp pgsql` CLI subcommand."
+        description = "Execute a PostgreSQL query, optionally through an SSH jump host. Same connection options as the `tools4a pgsql` CLI subcommand."
     )]
     async fn pgsql_exec(
         &self,
@@ -64,7 +64,7 @@ impl ToolsMcpServer {
 
     /// Execute a Redis command, optionally through an SSH tunnel.
     #[tool(
-        description = "Execute a Redis command, optionally through an SSH jump host. Same connection options as the `tools-mcp redis` CLI subcommand."
+        description = "Execute a Redis command, optionally through an SSH jump host. Same connection options as the `tools4a redis` CLI subcommand."
     )]
     async fn redis_exec(
         &self,
@@ -87,7 +87,7 @@ impl ToolsMcpServer {
 
     /// Execute a MongoDB command, optionally through an SSH tunnel.
     #[tool(
-        description = "Execute a MongoDB command (JSON object passed to runCommand), optionally through an SSH jump host. Same connection options as the `tools-mcp mongo` CLI subcommand."
+        description = "Execute a MongoDB command (JSON object passed to runCommand), optionally through an SSH jump host. Same connection options as the `tools4a mongo` CLI subcommand."
     )]
     async fn mongo_exec(
         &self,
@@ -110,7 +110,7 @@ impl ToolsMcpServer {
 
     /// Execute an HTTP request, optionally through an SSH tunnel.
     #[tool(
-        description = "Send an HTTP/HTTPS request and return status, headers, and body. Optionally route through an SSH jump host. Same options as the `tools-mcp http` CLI subcommand."
+        description = "Send an HTTP/HTTPS request and return status, headers, and body. Optionally route through an SSH jump host. Same options as the `tools4a http` CLI subcommand."
     )]
     async fn http_exec(
         &self,
@@ -159,9 +159,9 @@ impl ToolsMcpServer {
 impl ServerHandler for ToolsMcpServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
-            "tools-mcp: MySQL query execution with optional SSH tunneling. \
+            "tools4a: MySQL query execution with optional SSH tunneling. \
                  Use the mysql_exec tool. Connection params can come from a TOML \
-                 profile (~/.config/tools-mcp/config.toml), a YAML file, or be \
+                 profile (~/.config/tools4a/config.toml), a YAML file, or be \
                  supplied directly in the tool call.",
         )
     }

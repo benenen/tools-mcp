@@ -87,7 +87,7 @@ SHOW SLAVE STATUS\G          -- legacy
 1. Read the error message verbatim. Identify the error code.
 2. Pick the matching diagnostic query above; run it via `mysql_exec` with the SAME connection (profile / tunnel) the failing query used.
 3. Summarize the diagnostic output to the user before recommending a fix.
-4. If the user asks for a fix, propose it as a SQL change OR a config change — but **do not run destructive SQL without explicit confirmation** (see the `tools-mcp-using` skill).
+4. If the user asks for a fix, propose it as a SQL change OR a config change — but **do not run destructive SQL without explicit confirmation** (see the `tools4a-using` skill).
 
 ## What this skill is NOT
 

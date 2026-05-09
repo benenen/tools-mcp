@@ -12,7 +12,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 fn binary_path() -> std::path::PathBuf {
-    std::path::PathBuf::from(env!("CARGO_BIN_EXE_tools-mcp"))
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_tools4a"))
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn test_mcp_lists_mysql_exec_tool() {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("failed to spawn tools-mcp");
+        .expect("failed to spawn tools4a");
 
     let mut stdin = child.stdin.take().expect("no stdin");
     let stdout = child.stdout.take().expect("no stdout");

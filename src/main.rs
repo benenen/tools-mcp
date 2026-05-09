@@ -1,6 +1,6 @@
 use clap::Parser;
-use tools_mcp::cli::{Cli, CliHandler};
-use tools_mcp::mcp;
+use tools4a::cli::{Cli, CliHandler};
+use tools4a::mcp;
 
 #[tokio::main]
 async fn main() {

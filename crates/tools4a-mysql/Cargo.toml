@@ -1,0 +1,12 @@
+[package]
+name = "tools4a-mysql"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-trait = "0.1"
+mysql_async = "0.34"
+tools4a-core = { path = "../tools4a-core" }
+
+[dev-dependencies]
+tokio = { version = "1.40", features = ["full"] }

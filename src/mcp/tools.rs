@@ -2,9 +2,9 @@ use crate::output::ExecutionResult;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tools_mcp_core::{Error, Result, Service, TunnelConfig};
-use tools_mcp_orchestrator::config::{Config, ConfigLoader, ConfigMerger, Profile, ServiceType};
-use tools_mcp_orchestrator::{
+use tools4a_core::{Error, Result, Service, TunnelConfig};
+use tools4a_orchestrator::config::{Config, ConfigLoader, ConfigMerger, Profile, ServiceType};
+use tools4a_orchestrator::{
     HttpAuth, HttpOrchestrator, HttpRequestSpec, MongoOrchestrator, MongoRequest,
     MysqlOrchestrator, MysqlRequest, PgsqlOrchestrator, PgsqlRequest, RedisOrchestrator,
     RedisRequest, SshDirectOrchestrator, SshExecRequest,
@@ -38,7 +38,7 @@ pub struct MysqlExecParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
 
-    /// Profile name from ~/.config/tools-mcp/config.toml.
+    /// Profile name from ~/.config/tools4a/config.toml.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
 
@@ -108,7 +108,7 @@ fn params_to_config(p: &MysqlExecParams) -> Result<Config> {
     if let Some(profile_name) = &p.profile {
         let toml_config = ConfigLoader::load_default_toml()?.ok_or_else(|| {
             Error::Config(format!(
-                "profile '{}' requested but no ~/.config/tools-mcp/config.toml found",
+                "profile '{}' requested but no ~/.config/tools4a/config.toml found",
                 profile_name
             ))
         })?;
@@ -235,7 +235,7 @@ pub struct PgsqlExecParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
 
-    /// Profile name from ~/.config/tools-mcp/config.toml.
+    /// Profile name from ~/.config/tools4a/config.toml.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
 
@@ -274,7 +274,7 @@ fn pgsql_params_to_config(p: &PgsqlExecParams) -> Result<Config> {
     if let Some(profile_name) = &p.profile {
         let toml_config = ConfigLoader::load_default_toml()?.ok_or_else(|| {
             Error::Config(format!(
-                "profile '{profile_name}' requested but no ~/.config/tools-mcp/config.toml found"
+                "profile '{profile_name}' requested but no ~/.config/tools4a/config.toml found"
             ))
         })?;
         let profile_cfg = toml_config.profiles.get(profile_name).ok_or_else(|| {
@@ -378,7 +378,7 @@ pub struct RedisExecParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub db: Option<u32>,
 
-    /// Profile name from ~/.config/tools-mcp/config.toml.
+    /// Profile name from ~/.config/tools4a/config.toml.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
 
@@ -417,7 +417,7 @@ fn redis_params_to_config(p: &RedisExecParams) -> Result<Config> {
     if let Some(profile_name) = &p.profile {
         let toml_config = ConfigLoader::load_default_toml()?.ok_or_else(|| {
             Error::Config(format!(
-                "profile '{profile_name}' requested but no ~/.config/tools-mcp/config.toml found"
+                "profile '{profile_name}' requested but no ~/.config/tools4a/config.toml found"
             ))
         })?;
         let profile_cfg = toml_config.profiles.get(profile_name).ok_or_else(|| {
@@ -526,7 +526,7 @@ pub struct MongoExecParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
 
-    /// Profile name from ~/.config/tools-mcp/config.toml.
+    /// Profile name from ~/.config/tools4a/config.toml.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
 
@@ -565,7 +565,7 @@ fn mongo_params_to_config(p: &MongoExecParams) -> Result<Config> {
     if let Some(profile_name) = &p.profile {
         let toml_config = ConfigLoader::load_default_toml()?.ok_or_else(|| {
             Error::Config(format!(
-                "profile '{profile_name}' requested but no ~/.config/tools-mcp/config.toml found"
+                "profile '{profile_name}' requested but no ~/.config/tools4a/config.toml found"
             ))
         })?;
         let profile_cfg = toml_config.profiles.get(profile_name).ok_or_else(|| {

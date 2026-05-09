@@ -1,5 +1,5 @@
 {
-  "name": "tools-mcp",
+  "name": "tools4a",
   "description": "Run MySQL queries through SSH jump hosts (single- or multi-hop). Exposes a `mysql_exec` MCP tool with the same connection / tunnel / profile options as the CLI.",
   "version": "0.1.0",
   "keywords": ["mysql", "ssh", "tunnel", "bastion", "database"]

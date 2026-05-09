@@ -1,0 +1,13 @@
+[package]
+name = "tools4a-ssh"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-trait = "0.1"
+russh = "0.46"
+tokio = { version = "1.40", features = ["sync", "macros"] }
+tools4a-core = { path = "../tools4a-core" }
+
+[dev-dependencies]
+tokio = { version = "1.40", features = ["macros", "rt-multi-thread"] }

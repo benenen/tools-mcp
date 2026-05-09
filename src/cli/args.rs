@@ -18,9 +18,9 @@ Placeholder legend:
                     own section (e.g. \"MySQL\" for the mysql subcommand).";
 
 #[derive(Parser, Debug)]
-#[command(name = "tools-mcp")]
+#[command(name = "tools4a")]
 #[command(about = "Unified tool for SSH, MySQL, Redis connections with MCP support")]
-#[command(override_usage = "tools-mcp [GLOBAL OPTIONS] [COMMAND]")]
+#[command(override_usage = "tools4a [GLOBAL OPTIONS] [COMMAND]")]
 #[command(after_help = USAGE_LEGEND)]
 pub struct Cli {
     /// Path to YAML config file
@@ -70,7 +70,7 @@ pub enum TunnelKind {
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
     /// Execute a MySQL query
-    #[command(override_usage = "tools-mcp [GLOBAL OPTIONS] mysql [OPTIONS] <QUERY>")]
+    #[command(override_usage = "tools4a [GLOBAL OPTIONS] mysql [OPTIONS] <QUERY>")]
     #[command(after_help = USAGE_LEGEND)]
     Mysql {
         /// SQL query to execute
@@ -102,7 +102,7 @@ pub enum Commands {
     },
 
     /// Execute a PostgreSQL query
-    #[command(override_usage = "tools-mcp [GLOBAL OPTIONS] pgsql [OPTIONS] <QUERY>")]
+    #[command(override_usage = "tools4a [GLOBAL OPTIONS] pgsql [OPTIONS] <QUERY>")]
     #[command(after_help = USAGE_LEGEND)]
     Pgsql {
         /// SQL query to execute
@@ -134,7 +134,7 @@ pub enum Commands {
     },
 
     /// Execute a Redis command
-    #[command(override_usage = "tools-mcp [GLOBAL OPTIONS] redis [OPTIONS] <COMMAND>")]
+    #[command(override_usage = "tools4a [GLOBAL OPTIONS] redis [OPTIONS] <COMMAND>")]
     #[command(after_help = USAGE_LEGEND)]
     Redis {
         /// Redis command to execute (e.g. "GET key" or "HSET h f1 v1").
@@ -162,7 +162,7 @@ pub enum Commands {
     },
 
     /// Execute a MongoDB command (JSON document passed to db.runCommand)
-    #[command(override_usage = "tools-mcp [GLOBAL OPTIONS] mongo [OPTIONS] <COMMAND>")]
+    #[command(override_usage = "tools4a [GLOBAL OPTIONS] mongo [OPTIONS] <COMMAND>")]
     #[command(after_help = USAGE_LEGEND)]
     Mongo {
         /// Mongo command as a JSON object (e.g. `{"find":"users","filter":{}}`)
@@ -194,7 +194,7 @@ pub enum Commands {
     },
 
     /// Execute an HTTP request
-    #[command(override_usage = "tools-mcp [GLOBAL OPTIONS] http [OPTIONS] <METHOD> <URL>")]
+    #[command(override_usage = "tools4a [GLOBAL OPTIONS] http [OPTIONS] <METHOD> <URL>")]
     #[command(after_help = USAGE_LEGEND)]
     Http {
         /// HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS).
@@ -239,7 +239,7 @@ pub enum Commands {
     },
 
     /// Execute a shell command on an SSH target
-    #[command(override_usage = "tools-mcp [GLOBAL OPTIONS] ssh [OPTIONS] <COMMAND>")]
+    #[command(override_usage = "tools4a [GLOBAL OPTIONS] ssh [OPTIONS] <COMMAND>")]
     #[command(after_help = USAGE_LEGEND)]
     Ssh {
         /// Shell command to execute on the target.
@@ -283,7 +283,7 @@ mod tests {
     #[test]
     fn test_parse_mysql_command() {
         let args = Cli::try_parse_from([
-            "tools-mcp",
+            "tools4a",
             "mysql",
             "SELECT 1",
             "--host=localhost",
@@ -307,7 +307,7 @@ mod tests {
     fn test_ssh_flag_requires_tunnel() {
         // Providing --ssh-jump without --tunnel should fail parsing
         let result =
-            Cli::try_parse_from(["tools-mcp", "--ssh-jump=bastion.com", "mysql", "SELECT 1"]);
+            Cli::try_parse_from(["tools4a", "--ssh-jump=bastion.com", "mysql", "SELECT 1"]);
         assert!(
             result.is_err(),
             "expected parse error when --ssh-jump used without --tunnel"
@@ -316,11 +316,10 @@ mod tests {
 
     #[test]
     fn test_tunnel_kind_parse() {
-        let cli = Cli::try_parse_from(["tools-mcp", "--tunnel=ssh", "mysql", "SELECT 1"]).unwrap();
+        let cli = Cli::try_parse_from(["tools4a", "--tunnel=ssh", "mysql", "SELECT 1"]).unwrap();
         assert!(matches!(cli.tunnel, Some(TunnelKind::Ssh)));
 
-        let cli =
-            Cli::try_parse_from(["tools-mcp", "--tunnel=direct", "mysql", "SELECT 1"]).unwrap();
+        let cli = Cli::try_parse_from(["tools4a", "--tunnel=direct", "mysql", "SELECT 1"]).unwrap();
         assert!(matches!(cli.tunnel, Some(TunnelKind::Direct)));
     }
 }

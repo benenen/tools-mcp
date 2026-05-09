@@ -1,4 +1,4 @@
-# tools-mcp
+# tools4a
 
 Unified tool for SSH, MySQL, and Redis connections with MCP (Model Context Protocol) support.
 
@@ -13,13 +13,13 @@ Unified tool for SSH, MySQL, and Redis connections with MCP (Model Context Proto
 
 This is the Phase 9 release. Currently implemented:
 
-- All six service orchestrators (`MysqlOrchestrator`, `PgsqlOrchestrator`, `RedisOrchestrator`, `MongoOrchestrator`, `HttpOrchestrator`, `SshDirectOrchestrator`) impl the `tools_mcp_core::Service` trait, defined as `async fn execute(Self::Request, Option<TunnelConfig>) -> Result<ExecutionResult>`. They live in the `tools-mcp-orchestrator` lib crate.
-- MySQL CLI mode (`tools-mcp mysql "..."`) and `mysql_exec` MCP tool.
-- **PostgreSQL CLI mode** (`tools-mcp pgsql "..."`) and `pgsql_exec` MCP tool.
-- Redis CLI mode (`tools-mcp redis "..."`) and `redis_exec` MCP tool.
-- **MongoDB CLI mode** (`tools-mcp mongo '{"find":"coll","filter":{}}'`) and `mongo_exec` MCP tool — JSON document passed to `Database::run_command`.
-- HTTP CLI mode (`tools-mcp http GET https://...`) and `http_exec` MCP tool.
-- **SSH-direct CLI mode** (`tools-mcp ssh "..."`) and `ssh_exec` MCP tool —
+- All six service orchestrators (`MysqlOrchestrator`, `PgsqlOrchestrator`, `RedisOrchestrator`, `MongoOrchestrator`, `HttpOrchestrator`, `SshDirectOrchestrator`) impl the `tools4a_core::Service` trait, defined as `async fn execute(Self::Request, Option<TunnelConfig>) -> Result<ExecutionResult>`. They live in the `tools4a-orchestrator` lib crate.
+- MySQL CLI mode (`tools4a mysql "..."`) and `mysql_exec` MCP tool.
+- **PostgreSQL CLI mode** (`tools4a pgsql "..."`) and `pgsql_exec` MCP tool.
+- Redis CLI mode (`tools4a redis "..."`) and `redis_exec` MCP tool.
+- **MongoDB CLI mode** (`tools4a mongo '{"find":"coll","filter":{}}'`) and `mongo_exec` MCP tool — JSON document passed to `Database::run_command`.
+- HTTP CLI mode (`tools4a http GET https://...`) and `http_exec` MCP tool.
+- **SSH-direct CLI mode** (`tools4a ssh "..."`) and `ssh_exec` MCP tool —
   run a shell command on a target SSH server, optionally through SSH jump hosts.
 - Configuration via YAML file (`--config=PATH`) or TOML profile (`--profile=NAME`)
   for MySQL, PostgreSQL, Redis, and MongoDB. (HTTP and SSH-direct profile/YAML not yet supported.)
@@ -27,7 +27,7 @@ This is the Phase 9 release. Currently implemented:
 - SSH tunnel (`--tunnel=ssh`) with single- or multi-hop jump (`--ssh-jump=h1[,h2,...]`),
   password or key auth. Host keys accepted with a fingerprint warning.
   Works for all six services.
-- MCP server mode (`tools-mcp` with no subcommand) over stdio.
+- MCP server mode (`tools4a` with no subcommand) over stdio.
 
 Not yet implemented:
 - SSH key passphrases, per-hop auth overrides, strict known_hosts verification
@@ -45,19 +45,19 @@ Build a release binary and install it on `PATH`:
 ```bash
 cargo install --path .
 # or, for an unpublished build:
-cargo build --release && cp target/release/tools-mcp ~/.local/bin/
+cargo build --release && cp target/release/tools4a ~/.local/bin/
 ```
 
 `cargo install --path .` puts the binary at
-`~/.cargo/bin/tools-mcp`, which is on `PATH` by default after a normal
+`~/.cargo/bin/tools4a`, which is on `PATH` by default after a normal
 Rust toolchain install.
 
-This repo is a Cargo workspace. The `tools-mcp` binary crate lives at
+This repo is a Cargo workspace. The `tools4a` binary crate lives at
 the repo root (presentation layer only). The lib crates under `crates/`
-are: `tools-mcp-core` (trait floor + `Service` trait + `TunnelConfig`),
-`tools-mcp-mysql` / `tools-mcp-pgsql` / `tools-mcp-redis` / `tools-mcp-mongo` /
-`tools-mcp-http` / `tools-mcp-ssh` (per-service primitives), and
-`tools-mcp-orchestrator` (Config/Profile/Loader/Merger + Tunnel impls +
+are: `tools4a-core` (trait floor + `Service` trait + `TunnelConfig`),
+`tools4a-mysql` / `tools4a-pgsql` / `tools4a-redis` / `tools4a-mongo` /
+`tools4a-http` / `tools4a-ssh` (per-service primitives), and
+`tools4a-orchestrator` (Config/Profile/Loader/Merger + Tunnel impls +
 the six `<Svc>Orchestrator: impl Service`).
 `cargo build` / `cargo test` from the root build and test all of them.
 
@@ -67,20 +67,20 @@ the six `<Svc>Orchestrator: impl Service`).
 
 ```bash
 # Direct connection
-tools-mcp mysql "SELECT * FROM users" --host=localhost --user=root --password=secret
+tools4a mysql "SELECT * FROM users" --host=localhost --user=root --password=secret
 
 # Using YAML config
-tools-mcp --config=mysql.yaml mysql "SELECT * FROM users"
+tools4a --config=mysql.yaml mysql "SELECT * FROM users"
 
 # Using TOML profile
-tools-mcp mysql "SELECT * FROM users" --profile=prod
+tools4a mysql "SELECT * FROM users" --profile=prod
 
 # Through a single SSH jump
-tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=secret \
+tools4a --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=secret \
   mysql --host=mysql.internal --user=root --password=dbpass "SELECT 1"
 
 # Through two SSH jumps (comma-separated; all share --ssh-user/--ssh-password)
-tools-mcp --tunnel=ssh --ssh-jump=bastion1.com,bastion2.com --ssh-user=admin \
+tools4a --tunnel=ssh --ssh-jump=bastion1.com,bastion2.com --ssh-user=admin \
   --ssh-key-path=~/.ssh/jump_key \
   mysql --host=mysql.internal --user=root --password=dbpass "SELECT 1"
 ```
@@ -89,14 +89,14 @@ tools-mcp --tunnel=ssh --ssh-jump=bastion1.com,bastion2.com --ssh-user=admin \
 
 ```bash
 # Direct connection
-tools-mcp pgsql "SELECT * FROM users LIMIT 5" --host=localhost --user=postgres --password=secret --database=myapp
+tools4a pgsql "SELECT * FROM users LIMIT 5" --host=localhost --user=postgres --password=secret --database=myapp
 
 # Through an SSH jump
-tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-key-path=~/.ssh/id_rsa \
+tools4a --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-key-path=~/.ssh/id_rsa \
   pgsql --host=pg.internal --user=app --password=app_pwd --database=myapp "SELECT NOW()"
 
 # Using a TOML profile
-tools-mcp pgsql "SELECT count(*) FROM events" --profile=prod-postgres
+tools4a pgsql "SELECT count(*) FROM events" --profile=prod-postgres
 ```
 
 ### MongoDB
@@ -105,15 +105,15 @@ Mongo commands are JSON documents passed to `Database::run_command`:
 
 ```bash
 # find
-tools-mcp mongo '{"find":"users","filter":{"active":true},"limit":5}' \
+tools4a mongo '{"find":"users","filter":{"active":true},"limit":5}' \
   --host=localhost --database=myapp
 
 # insert
-tools-mcp mongo '{"insert":"events","documents":[{"type":"signup","ts":1}]}' \
+tools4a mongo '{"insert":"events","documents":[{"type":"signup","ts":1}]}' \
   --host=mongo.internal --user=app --password=secret --database=analytics
 
 # Through an SSH jump
-tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=jpwd \
+tools4a --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=jpwd \
   mongo '{"listCollections":1}' --host=mongo.internal --database=admin
 ```
 
@@ -121,64 +121,64 @@ tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=jp
 
 ```bash
 # Direct connection
-tools-mcp redis "GET mykey" --host=localhost --port=6379
+tools4a redis "GET mykey" --host=localhost --port=6379
 
 # With password + db
-tools-mcp redis "HGETALL myhash" --host=localhost --password=secret --db=2
+tools4a redis "HGETALL myhash" --host=localhost --password=secret --db=2
 
 # Through an SSH jump
-tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=secret \
+tools4a --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=secret \
   redis "INFO replication" --host=redis.internal --password=cache_pwd
 
 # Using a TOML profile
-tools-mcp redis "KEYS *" --profile=prod-cache
+tools4a redis "KEYS *" --profile=prod-cache
 ```
 
 ### HTTP
 
 ```bash
 # Simple GET
-tools-mcp http GET https://api.example.com/users
+tools4a http GET https://api.example.com/users
 
 # POST with JSON body
-tools-mcp http POST https://api.example.com/users \
+tools4a http POST https://api.example.com/users \
   --json --data '{"name":"alice"}' \
   --bearer "$API_TOKEN"
 
 # Through an SSH jump to an internal HTTPS service
-tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=secret \
+tools4a --tunnel=ssh --ssh-jump=bastion.com --ssh-user=admin --ssh-password=secret \
   http GET https://internal-api.local/health
 
 # Self-signed cert internal service (show full status + headers + body)
-tools-mcp http GET https://10.0.0.5/api --insecure -i
+tools4a http GET https://10.0.0.5/api --insecure -i
 ```
 
 ### SSH (remote command execution)
 
 ```bash
 # Direct connection
-tools-mcp ssh "uname -a" --host=server.com --user=admin --key-path=~/.ssh/id_rsa
+tools4a ssh "uname -a" --host=server.com --user=admin --key-path=~/.ssh/id_rsa
 
 # With password
-tools-mcp ssh "df -h" --host=10.0.0.5 --user=root --password=secret
+tools4a ssh "df -h" --host=10.0.0.5 --user=root --password=secret
 
 # Through an SSH jump (jump creds are SEPARATE from target creds)
-tools-mcp --tunnel=ssh --ssh-jump=bastion.com --ssh-user=jumper --ssh-password=jpwd \
+tools4a --tunnel=ssh --ssh-jump=bastion.com --ssh-user=jumper --ssh-password=jpwd \
   ssh "systemctl status nginx" --host=internal-server --user=admin --key-path=~/.ssh/target_key
 
 # Show structured output (exit_code/stdout/stderr table)
-tools-mcp ssh "false" --host=h --user=u --key-path=~/.ssh/k -i
+tools4a ssh "false" --host=h --user=u --key-path=~/.ssh/k -i
 ```
 
-By default `tools-mcp`'s exit code mirrors the remote command's exit code,
-so shell-script usage works (e.g. `if tools-mcp ssh "test -f /etc/passwd" ...`).
+By default `tools4a`'s exit code mirrors the remote command's exit code,
+so shell-script usage works (e.g. `if tools4a ssh "test -f /etc/passwd" ...`).
 
 ### MCP Server
 
-Run `tools-mcp` with no subcommand to start an MCP server over stdio:
+Run `tools4a` with no subcommand to start an MCP server over stdio:
 
 ```bash
-tools-mcp
+tools4a
 ```
 
 It exposes six tools (`mysql_exec`, `pgsql_exec`, `redis_exec`, `mongo_exec`,
@@ -193,8 +193,8 @@ Example MCP configuration entry (e.g. for Claude Desktop):
 ```json
 {
   "mcpServers": {
-    "tools-mcp": {
-      "command": "/usr/local/bin/tools-mcp"
+    "tools4a": {
+      "command": "/usr/local/bin/tools4a"
     }
   }
 }
@@ -207,19 +207,19 @@ This repo ships a Claude Code plugin (`.claude-plugin/plugin.json` +
 service MCP tools plus the project-specific skills — all wired up
 automatically.
 
-Prerequisite: `cargo install --path .` so the `tools-mcp` binary is on `PATH`.
+Prerequisite: `cargo install --path .` so the `tools4a` binary is on `PATH`.
 
 Then in Claude Code:
 
 ```bash
-/plugin marketplace add /path/to/tools-mcp        # one-time
-/plugin install tools-mcp                          # enable the plugin
+/plugin marketplace add /path/to/tools4a        # one-time
+/plugin install tools4a                          # enable the plugin
 ```
 
 Or, for ad-hoc loading without going through a marketplace:
 
 ```bash
-claude --plugin-dir /path/to/tools-mcp
+claude --plugin-dir /path/to/tools4a
 ```
 
 What the plugin provides:
@@ -232,7 +232,7 @@ What the plugin provides:
   - `http_exec` — send an HTTP request.
   - `ssh_exec` — run a shell command on a remote SSH server.
 - **Skills** that guide the assistant:
-  - `tools-mcp-using` — consolidated guide for all six tools: parameter shape per service, three-layer config priority (mysql + pgsql + redis + mongo), SSH tunnel syntax, output mapping, destructive-command list.
+  - `tools4a-using` — consolidated guide for all six tools: parameter shape per service, three-layer config priority (mysql + pgsql + redis + mongo), SSH tunnel syntax, output mapping, destructive-command list.
   - `mysql-debugging` — diagnostic queries for common MySQL errors, locks, slow queries.
   - `ssh-bastion-checklist` — narrows down SSH-tunnel failures.
 
@@ -248,7 +248,7 @@ password: secret
 database: mydb
 ```
 
-**TOML Config** (`~/.config/tools-mcp/config.toml`):
+**TOML Config** (`~/.config/tools4a/config.toml`):
 ```toml
 [profiles.prod]
 type = "mysql"
