@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/tools-mcp-core",
     "crates/tools-mcp-http",
+    "crates/tools-mcp-mongo",
     "crates/tools-mcp-mysql",
     "crates/tools-mcp-orchestrator",
     "crates/tools-mcp-pgsql",
