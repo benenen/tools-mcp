@@ -5,6 +5,7 @@ members = [
     "crates/tools-mcp-http",
     "crates/tools-mcp-mysql",
     "crates/tools-mcp-orchestrator",
+    "crates/tools-mcp-pgsql",
     "crates/tools-mcp-redis",
     "crates/tools-mcp-ssh",
 ]
