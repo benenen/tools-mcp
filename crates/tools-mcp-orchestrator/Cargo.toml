@@ -13,6 +13,7 @@ tokio = { version = "1.40", features = ["full"] }
 toml = "0.8"
 tools-mcp-core = { path = "../tools-mcp-core" }
 tools-mcp-http = { path = "../tools-mcp-http" }
+tools-mcp-mongo = { path = "../tools-mcp-mongo" }
 tools-mcp-mysql = { path = "../tools-mcp-mysql" }
 tools-mcp-pgsql = { path = "../tools-mcp-pgsql" }
 tools-mcp-redis = { path = "../tools-mcp-redis" }
