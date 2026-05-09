@@ -200,29 +200,57 @@ Example MCP configuration entry (e.g. for Claude Desktop):
 }
 ```
 
-### Use as a Claude Code plugin
+### Install in Claude Code
 
 This repo ships a Claude Code plugin (`.claude-plugin/plugin.json` +
-`.mcp.json` + `skills/`). Loading the plugin gives Claude the six
-service MCP tools plus the project-specific skills — all wired up
-automatically.
+`.claude-plugin/marketplace.json` + `.mcp.json` + `skills/`). Once
+installed, Claude gets the six service MCP tools plus the
+project-specific skills — all wired up automatically.
 
-Prerequisite: `cargo install --path .` so the `tools4a` binary is on `PATH`.
+Pick **one** of the two paths below.
 
-Then in Claude Code:
+#### Path A: Install as a plugin (recommended)
 
-```bash
-/plugin marketplace add /path/to/tools4a        # one-time
-/plugin install tools4a                          # enable the plugin
-```
-
-Or, for ad-hoc loading without going through a marketplace:
+Gives you the MCP tools **and** the bundled skills (`tools4a-using`,
+`mysql-debugging`, `ssh-bastion-checklist`).
 
 ```bash
-claude --plugin-dir /path/to/tools4a
+# 1. Build & install the binary onto $PATH
+cargo install --path .                              # produces ~/.cargo/bin/tools4a
+
+# 2. In a Claude Code session, register this repo as a marketplace
+/plugin marketplace add /absolute/path/to/tools4a   # one-time
+
+# 3. Install the plugin from that marketplace
+/plugin install tools4a@tools4a                     # enable plugin
+
+# 4. Verify
+/mcp                                                # should list `tools4a`
 ```
 
-What the plugin provides:
+To upgrade after pulling new commits, rebuild the binary
+(`cargo install --path . --force`) and re-run `/plugin marketplace update tools4a`.
+
+#### Path B: Install as a plain MCP server (lighter)
+
+Gives you the six MCP tools only (no skills). Useful if you don't want
+plugin-level integration.
+
+```bash
+# 1. Build & install the binary
+cargo install --path .
+
+# 2. Register the MCP server with Claude Code
+claude mcp add tools4a tools4a                      # name=tools4a, command=tools4a
+
+# 3. Verify
+claude mcp list                                     # should show `tools4a`
+```
+
+The `tools4a` binary speaks MCP over stdio when invoked with no
+subcommand, so no extra flags are needed.
+
+#### What the plugin provides
 
 - **MCP tools** auto-registered via `.mcp.json`:
   - `mysql_exec` — run a MySQL query.
@@ -231,7 +259,7 @@ What the plugin provides:
   - `mongo_exec` — run a MongoDB command (JSON document to `runCommand`).
   - `http_exec` — send an HTTP request.
   - `ssh_exec` — run a shell command on a remote SSH server.
-- **Skills** that guide the assistant:
+- **Skills** that guide the assistant (Path A only):
   - `tools4a-using` — consolidated guide for all six tools: parameter shape per service, three-layer config priority (mysql + pgsql + redis + mongo), SSH tunnel syntax, output mapping, destructive-command list.
   - `mysql-debugging` — diagnostic queries for common MySQL errors, locks, slow queries.
   - `ssh-bastion-checklist` — narrows down SSH-tunnel failures.
