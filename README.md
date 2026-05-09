@@ -166,9 +166,9 @@ Example MCP configuration entry (e.g. for Claude Desktop):
 ### Use as a Claude Code plugin
 
 This repo ships a Claude Code plugin (`.claude-plugin/plugin.json` +
-`.mcp.json` + `skills/` + `commands/`). Loading the plugin gives Claude
-the `mysql_exec` MCP tool plus three project-specific skills and one
-slash command — all wired up automatically.
+`.mcp.json` + `skills/`). Loading the plugin gives Claude the four
+service MCP tools plus the project-specific skills — all wired up
+automatically.
 
 Prerequisite: `cargo install --path .` so the `tools-mcp` binary is on `PATH`.
 
@@ -199,11 +199,6 @@ What the plugin provides:
   - `http-using` — HTTP tool input, tunnel routing for internal HTTPS, output mapping.
   - `ssh-using` — SSH-direct target/jump cred separation, output mapping, PTY limits.
   - `ssh-bastion-checklist` — narrows down SSH-tunnel failures.
-- **Slash commands**:
-  - `/mysql <SQL>` — quick MySQL query.
-  - `/redis <COMMAND>` — quick Redis command.
-  - `/http <METHOD> <URL>` — quick HTTP request.
-  - `/ssh <COMMAND>` — quick remote shell command.
 
 ### Configuration
 
