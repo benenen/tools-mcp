@@ -101,6 +101,38 @@ pub enum Commands {
         profile: Option<String>,
     },
 
+    /// Execute a PostgreSQL query
+    #[command(override_usage = "tools-mcp [GLOBAL OPTIONS] pgsql [OPTIONS] <QUERY>")]
+    #[command(after_help = USAGE_LEGEND)]
+    Pgsql {
+        /// SQL query to execute
+        query: String,
+
+        /// Pgsql host
+        #[arg(long, help_heading = "Pgsql")]
+        host: Option<String>,
+
+        /// Pgsql port (default 5432)
+        #[arg(long, help_heading = "Pgsql")]
+        port: Option<u16>,
+
+        /// Pgsql user
+        #[arg(long, help_heading = "Pgsql")]
+        user: Option<String>,
+
+        /// Pgsql password
+        #[arg(long, help_heading = "Pgsql")]
+        password: Option<String>,
+
+        /// Database name
+        #[arg(long, help_heading = "Pgsql")]
+        database: Option<String>,
+
+        /// Profile name from config
+        #[arg(long, help_heading = "Pgsql")]
+        profile: Option<String>,
+    },
+
     /// Execute a Redis command
     #[command(override_usage = "tools-mcp [GLOBAL OPTIONS] redis [OPTIONS] <COMMAND>")]
     #[command(after_help = USAGE_LEGEND)]
@@ -126,6 +158,38 @@ pub enum Commands {
 
         /// Profile name from config
         #[arg(long, help_heading = "Redis")]
+        profile: Option<String>,
+    },
+
+    /// Execute a MongoDB command (JSON document passed to db.runCommand)
+    #[command(override_usage = "tools-mcp [GLOBAL OPTIONS] mongo [OPTIONS] <COMMAND>")]
+    #[command(after_help = USAGE_LEGEND)]
+    Mongo {
+        /// Mongo command as a JSON object (e.g. `{"find":"users","filter":{}}`)
+        command: String,
+
+        /// Mongo host
+        #[arg(long, help_heading = "Mongo")]
+        host: Option<String>,
+
+        /// Mongo port (default 27017)
+        #[arg(long, help_heading = "Mongo")]
+        port: Option<u16>,
+
+        /// Mongo user (optional — Mongo allows unauthenticated connections)
+        #[arg(long, help_heading = "Mongo")]
+        user: Option<String>,
+
+        /// Mongo password (optional)
+        #[arg(long, help_heading = "Mongo")]
+        password: Option<String>,
+
+        /// Database name (required for runCommand)
+        #[arg(long, help_heading = "Mongo")]
+        database: Option<String>,
+
+        /// Profile name from config
+        #[arg(long, help_heading = "Mongo")]
         profile: Option<String>,
     },
 

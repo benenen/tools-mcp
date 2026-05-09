@@ -3,8 +3,9 @@ use crate::output::CliFormatter;
 use tools_mcp_core::{Error, Result, Service, TunnelConfig};
 use tools_mcp_orchestrator::config::{Config, ConfigLoader, ConfigMerger, ServiceType};
 use tools_mcp_orchestrator::{
-    HttpAuth, HttpOrchestrator, HttpRequestSpec, MysqlOrchestrator, MysqlRequest,
-    RedisOrchestrator, RedisRequest, SshDirectOrchestrator, SshExecRequest,
+    HttpAuth, HttpOrchestrator, HttpRequestSpec, MongoOrchestrator, MongoRequest,
+    MysqlOrchestrator, MysqlRequest, PgsqlOrchestrator, PgsqlRequest, RedisOrchestrator,
+    RedisRequest, SshDirectOrchestrator, SshExecRequest,
 };
 
 pub struct CliHandler;
@@ -35,6 +36,28 @@ impl CliHandler {
 
                 Self::execute_mysql(&query, config).await
             }
+            Some(Commands::Pgsql {
+                query,
+                host,
+                port,
+                user,
+                password,
+                database,
+                profile,
+            }) => {
+                let config = Self::build_config(
+                    &cli,
+                    ServiceType::Pgsql,
+                    host,
+                    port,
+                    user,
+                    password,
+                    database,
+                    None, // key_path is not a Pgsql flag
+                    profile,
+                )?;
+                Self::execute_pgsql(&query, config).await
+            }
             Some(Commands::Redis {
                 command,
                 host,
@@ -45,6 +68,28 @@ impl CliHandler {
             }) => {
                 let config = Self::build_config_redis(&cli, host, port, password, db, profile)?;
                 Self::execute_redis(&command, config).await
+            }
+            Some(Commands::Mongo {
+                command,
+                host,
+                port,
+                user,
+                password,
+                database,
+                profile,
+            }) => {
+                let config = Self::build_config(
+                    &cli,
+                    ServiceType::Mongo,
+                    host,
+                    port,
+                    user,
+                    password,
+                    database,
+                    None,
+                    profile,
+                )?;
+                Self::execute_mongo(&command, config).await
             }
             Some(Commands::Http {
                 method,
@@ -218,6 +263,24 @@ impl CliHandler {
         let tunnel = config.tunnel.clone();
         let req = MysqlRequest::from_config(config, query.to_string())?;
         let result = MysqlOrchestrator::execute(req, tunnel).await?;
+        let output = CliFormatter::format(&result);
+        println!("{output}");
+        Ok(())
+    }
+
+    async fn execute_pgsql(query: &str, config: Config) -> Result<()> {
+        let tunnel = config.tunnel.clone();
+        let req = PgsqlRequest::from_config(config, query.to_string())?;
+        let result = PgsqlOrchestrator::execute(req, tunnel).await?;
+        let output = CliFormatter::format(&result);
+        println!("{output}");
+        Ok(())
+    }
+
+    async fn execute_mongo(command: &str, config: Config) -> Result<()> {
+        let tunnel = config.tunnel.clone();
+        let req = MongoRequest::from_config(config, command.to_string())?;
+        let result = MongoOrchestrator::execute(req, tunnel).await?;
         let output = CliFormatter::format(&result);
         println!("{output}");
         Ok(())
