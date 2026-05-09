@@ -6,12 +6,14 @@
 pub mod config;
 pub mod http;
 pub mod mysql;
+pub mod pgsql;
 pub mod redis;
 pub mod ssh;
 pub mod tunnel;
 
 pub use http::HttpOrchestrator;
 pub use mysql::{MysqlOrchestrator, MysqlRequest};
+pub use pgsql::{PgsqlOrchestrator, PgsqlRequest};
 pub use redis::{RedisOrchestrator, RedisRequest};
 pub use ssh::SshDirectOrchestrator;
 
