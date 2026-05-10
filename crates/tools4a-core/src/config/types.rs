@@ -7,6 +7,7 @@ use std::str::FromStr;
 pub enum ServiceType {
     Mysql,
     Pgsql,
+    Clickhouse,
     Redis,
     Mongo,
     Ssh,
@@ -20,6 +21,7 @@ impl FromStr for ServiceType {
         match s.to_lowercase().as_str() {
             "mysql" => Ok(ServiceType::Mysql),
             "pgsql" | "postgres" | "postgresql" => Ok(ServiceType::Pgsql),
+            "clickhouse" | "ch" => Ok(ServiceType::Clickhouse),
             "redis" => Ok(ServiceType::Redis),
             "mongo" | "mongodb" => Ok(ServiceType::Mongo),
             "ssh" => Ok(ServiceType::Ssh),
@@ -86,6 +88,14 @@ mod tests {
         assert_eq!(
             "mongodb".parse::<ServiceType>().unwrap(),
             ServiceType::Mongo
+        );
+        assert_eq!(
+            "clickhouse".parse::<ServiceType>().unwrap(),
+            ServiceType::Clickhouse
+        );
+        assert_eq!(
+            "ch".parse::<ServiceType>().unwrap(),
+            ServiceType::Clickhouse
         );
         assert_eq!("ssh".parse::<ServiceType>().unwrap(), ServiceType::Ssh);
         assert!("invalid".parse::<ServiceType>().is_err());
