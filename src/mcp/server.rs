@@ -9,6 +9,7 @@ use rmcp::{
     model::{CallToolResult, Content, ServerCapabilities, ServerInfo},
     tool, tool_handler, tool_router,
 };
+use tools4a_clickhouse::{ClickhouseExecParams, ClickhouseMcp};
 use tools4a_core::{ExecutionResult, McpTool};
 use tools4a_http::{HttpExecParams, HttpMcp};
 use tools4a_mongo::{MongoExecParams, MongoMcp};
@@ -69,6 +70,16 @@ impl ToolsMcpServer {
     }
 
     #[tool(
+        description = "Execute a ClickHouse SQL query over HTTP, optionally through an SSH jump host. Reads are allowed by default; writes (INSERT/ALTER/DROP/etc.) require allow_write=true."
+    )]
+    async fn clickhouse_exec(
+        &self,
+        Parameters(params): Parameters<ClickhouseExecParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(ClickhouseMcp::invoke(params).await)
+    }
+
+    #[tool(
         description = "Execute a Redis command, optionally through an SSH jump host. Same connection options as the `tools4a redis` CLI subcommand."
     )]
     async fn redis_exec(
@@ -113,11 +124,11 @@ impl ToolsMcpServer {
 impl ServerHandler for ToolsMcpServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
-            "tools4a: unified MySQL / PostgreSQL / Redis / MongoDB / HTTP / SSH \
-             tools with optional SSH tunneling. Database reads are allowed by \
-             default; writes require allow_write=true. Connection params can \
-             come from a TOML profile (~/.config/tools4a/config.toml), a YAML \
-             file, or be supplied directly in the tool call.",
+            "tools4a: unified MySQL / PostgreSQL / ClickHouse / Redis / MongoDB / \
+             HTTP / SSH tools with optional SSH tunneling. Database reads are \
+             allowed by default; writes require allow_write=true. Connection \
+             params can come from a TOML profile (~/.config/tools4a/config.toml), \
+             a YAML file, or be supplied directly in the tool call.",
         )
     }
 }

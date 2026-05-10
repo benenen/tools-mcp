@@ -144,6 +144,43 @@ pub enum Commands {
         allow_write: bool,
     },
 
+    /// Execute a ClickHouse SQL query (over HTTP)
+    #[command(override_usage = "tools4a [GLOBAL OPTIONS] clickhouse [OPTIONS] <QUERY>")]
+    #[command(after_help = USAGE_LEGEND)]
+    Clickhouse {
+        /// SQL query to execute
+        query: String,
+
+        /// ClickHouse host
+        #[arg(long, help_heading = "ClickHouse")]
+        host: Option<String>,
+
+        /// ClickHouse HTTP port (default 8123)
+        #[arg(long, help_heading = "ClickHouse")]
+        port: Option<u16>,
+
+        /// ClickHouse user (default "default")
+        #[arg(long, help_heading = "ClickHouse")]
+        user: Option<String>,
+
+        /// ClickHouse password
+        #[arg(long, help_heading = "ClickHouse")]
+        password: Option<String>,
+
+        /// Database name
+        #[arg(long, help_heading = "ClickHouse")]
+        database: Option<String>,
+
+        /// Profile name from config
+        #[arg(long, help_heading = "ClickHouse")]
+        profile: Option<String>,
+
+        /// Allow write operations. Off by default; the session also runs
+        /// with `readonly=1` server-side unless this is set.
+        #[arg(long = "allow-write", help_heading = "ClickHouse")]
+        allow_write: bool,
+    },
+
     /// Execute a Redis command
     #[command(override_usage = "tools4a [GLOBAL OPTIONS] redis [OPTIONS] <COMMAND>")]
     #[command(after_help = USAGE_LEGEND)]

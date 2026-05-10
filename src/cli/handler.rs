@@ -1,5 +1,6 @@
 use crate::cli::{Cli, Commands, TunnelKind};
 use crate::output::CliFormatter;
+use tools4a_clickhouse::{ClickhouseOrchestrator, ClickhouseRequest};
 use tools4a_core::config::{Config, ConfigLoader, ConfigMerger, ServiceType};
 use tools4a_core::{Error, Result, Service, TunnelConfig};
 use tools4a_http::{HttpAuth, HttpOrchestrator, HttpRequestSpec};
@@ -60,6 +61,29 @@ impl CliHandler {
                     profile,
                 )?;
                 Self::execute_pgsql(&query, config, allow_write).await
+            }
+            Some(Commands::Clickhouse {
+                query,
+                host,
+                port,
+                user,
+                password,
+                database,
+                profile,
+                allow_write,
+            }) => {
+                let config = Self::build_config(
+                    &cli,
+                    ServiceType::Clickhouse,
+                    host,
+                    port,
+                    user,
+                    password,
+                    database,
+                    None, // key_path is not a Clickhouse flag
+                    profile,
+                )?;
+                Self::execute_clickhouse(&query, config, allow_write).await
             }
             Some(Commands::Redis {
                 command,
@@ -278,6 +302,16 @@ impl CliHandler {
         let mut req = PgsqlRequest::from_config(config, query.to_string())?;
         req.allow_write = allow_write;
         let result = PgsqlOrchestrator::execute(req, tunnel).await?;
+        let output = CliFormatter::format(&result);
+        println!("{output}");
+        Ok(())
+    }
+
+    async fn execute_clickhouse(query: &str, config: Config, allow_write: bool) -> Result<()> {
+        let tunnel = config.tunnel.clone();
+        let mut req = ClickhouseRequest::from_config(config, query.to_string())?;
+        req.allow_write = allow_write;
+        let result = ClickhouseOrchestrator::execute(req, tunnel).await?;
         let output = CliFormatter::format(&result);
         println!("{output}");
         Ok(())
