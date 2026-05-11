@@ -12,9 +12,13 @@ pub mod config;
 pub mod mcp;
 pub mod readonly;
 pub mod session;
+pub mod timeout;
 pub mod tunnel;
 
 pub use mcp::{McpTool, SshJumpInput, TunnelKind, build_tunnel_config};
+pub use timeout::{
+    DEFAULT_MAX_TIMEOUT_SECS, EffectiveTimeout, apply_with_timeout, resolve_effective_timeout,
+};
 pub use tunnel::{DirectTunnel, SshTunnel, build_tunnel};
 
 use async_trait::async_trait;
@@ -33,6 +37,11 @@ pub enum Error {
     /// Higher crates wrap their library errors into this variant via
     /// `Error::Service(format!("{e}"))` to keep core dep-free.
     Service(String),
+    /// The underlying protocol call exceeded the resolved timeout.
+    /// Carries the full `EffectiveTimeout` so the error message can
+    /// distinguish "you asked for 60s and got 60s" from "you asked for
+    /// 60s but the operator-side cap shrank it to 3s".
+    Timeout(timeout::EffectiveTimeout),
 }
 
 impl fmt::Display for Error {
@@ -43,6 +52,17 @@ impl fmt::Display for Error {
             Error::Execution(msg) => write!(f, "Execution error: {msg}"),
             Error::Io(e) => write!(f, "IO error: {e}"),
             Error::Service(msg) => write!(f, "Service error: {msg}"),
+            Error::Timeout(t) => {
+                if t.clamped {
+                    write!(
+                        f,
+                        "Timeout: operation exceeded {}s (requested {}s was capped to the {}s ceiling)",
+                        t.effective_secs, t.requested_secs, t.max_secs
+                    )
+                } else {
+                    write!(f, "Timeout: operation exceeded {}s", t.effective_secs)
+                }
+            }
         }
     }
 }
@@ -51,9 +71,11 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Error::Io(e) => Some(e),
-            Error::Config(_) | Error::Connection(_) | Error::Execution(_) | Error::Service(_) => {
-                None
-            }
+            Error::Config(_)
+            | Error::Connection(_)
+            | Error::Execution(_)
+            | Error::Service(_)
+            | Error::Timeout(_) => None,
         }
     }
 }
@@ -97,6 +119,10 @@ pub struct ExecutionResult {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<String>>,
     pub affected_rows: u64,
+    /// Non-fatal advisories surfaced by the orchestrator (e.g. a clamp
+    /// notice when the requested timeout exceeded the configured maximum).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 impl ExecutionResult {
@@ -105,7 +131,17 @@ impl ExecutionResult {
             columns,
             rows,
             affected_rows,
+            warnings: Vec::new(),
         }
+    }
+
+    pub fn with_warning(mut self, warning: impl Into<String>) -> Self {
+        self.warnings.push(warning.into());
+        self
+    }
+
+    pub fn push_warning(&mut self, warning: impl Into<String>) {
+        self.warnings.push(warning.into());
     }
 }
 

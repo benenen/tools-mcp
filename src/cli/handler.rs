@@ -1,8 +1,8 @@
 use crate::cli::{Cli, Commands, TunnelKind};
 use crate::output::CliFormatter;
 use tools4a_clickhouse::{ClickhouseOrchestrator, ClickhouseRequest};
-use tools4a_core::config::{Config, ConfigLoader, ConfigMerger, ServiceType};
-use tools4a_core::{Error, Result, Service, TunnelConfig};
+use tools4a_core::config::{Config, ConfigLoader, ConfigMerger, ServiceType, TomlConfig};
+use tools4a_core::{Error, ExecutionResult, Result, Service, TunnelConfig};
 use tools4a_http::{HttpAuth, HttpOrchestrator, HttpRequestSpec};
 use tools4a_mongo::{MongoOrchestrator, MongoRequest};
 use tools4a_mysql::{MysqlOrchestrator, MysqlRequest};
@@ -223,9 +223,30 @@ impl CliHandler {
             db: None,
             key_path,
             tunnel: tunnel_config,
+            timeout_secs: cli.timeout,
         });
 
         Ok(ConfigMerger::merge_multiple(configs))
+    }
+
+    /// Read TOML `[defaults].max_timeout_secs` once for the current CLI
+    /// invocation. Each service-execute helper consults this so the
+    /// orchestrator's resolver can honor the operator-side cap. Env var
+    /// `TOOLS4A_MAX_TIMEOUT_SECS` still takes precedence over the value
+    /// pulled here.
+    fn load_max_timeout_secs() -> Result<Option<u64>> {
+        Ok(
+            ConfigLoader::load_default_toml()?
+                .and_then(|t: TomlConfig| t.defaults.max_timeout_secs),
+        )
+    }
+
+    /// Emit non-fatal advisories (e.g. timeout-clamp notices) to stderr
+    /// so they don't get tangled up with the result table on stdout.
+    fn print_warnings(result: &ExecutionResult) {
+        for w in &result.warnings {
+            eprintln!("warning: {w}");
+        }
     }
 
     fn cli_to_tunnel_config(cli: &Cli) -> Result<Option<TunnelConfig>> {
@@ -284,14 +305,18 @@ impl CliHandler {
             db: profile.db,
             key_path: profile.key_path.clone(),
             tunnel: profile.tunnel.clone(),
+            timeout_secs: profile.timeout_secs,
         }
     }
 
     async fn execute_mysql(query: &str, config: Config, allow_write: bool) -> Result<()> {
         let tunnel = config.tunnel.clone();
+        let max_timeout_secs = Self::load_max_timeout_secs()?;
         let mut req = MysqlRequest::from_config(config, query.to_string())?;
         req.allow_write = allow_write;
+        req.max_timeout_secs = max_timeout_secs;
         let result = MysqlOrchestrator::execute(req, tunnel).await?;
+        Self::print_warnings(&result);
         let output = CliFormatter::format(&result);
         println!("{output}");
         Ok(())
@@ -299,9 +324,12 @@ impl CliHandler {
 
     async fn execute_pgsql(query: &str, config: Config, allow_write: bool) -> Result<()> {
         let tunnel = config.tunnel.clone();
+        let max_timeout_secs = Self::load_max_timeout_secs()?;
         let mut req = PgsqlRequest::from_config(config, query.to_string())?;
         req.allow_write = allow_write;
+        req.max_timeout_secs = max_timeout_secs;
         let result = PgsqlOrchestrator::execute(req, tunnel).await?;
+        Self::print_warnings(&result);
         let output = CliFormatter::format(&result);
         println!("{output}");
         Ok(())
@@ -309,9 +337,12 @@ impl CliHandler {
 
     async fn execute_clickhouse(query: &str, config: Config, allow_write: bool) -> Result<()> {
         let tunnel = config.tunnel.clone();
+        let max_timeout_secs = Self::load_max_timeout_secs()?;
         let mut req = ClickhouseRequest::from_config(config, query.to_string())?;
         req.allow_write = allow_write;
+        req.max_timeout_secs = max_timeout_secs;
         let result = ClickhouseOrchestrator::execute(req, tunnel).await?;
+        Self::print_warnings(&result);
         let output = CliFormatter::format(&result);
         println!("{output}");
         Ok(())
@@ -319,9 +350,12 @@ impl CliHandler {
 
     async fn execute_mongo(command: &str, config: Config, allow_write: bool) -> Result<()> {
         let tunnel = config.tunnel.clone();
+        let max_timeout_secs = Self::load_max_timeout_secs()?;
         let mut req = MongoRequest::from_config(config, command.to_string())?;
         req.allow_write = allow_write;
+        req.max_timeout_secs = max_timeout_secs;
         let result = MongoOrchestrator::execute(req, tunnel).await?;
+        Self::print_warnings(&result);
         let output = CliFormatter::format(&result);
         println!("{output}");
         Ok(())
@@ -365,6 +399,7 @@ impl CliHandler {
             db,
             key_path: None,
             tunnel: tunnel_config,
+            timeout_secs: cli.timeout,
         });
 
         Ok(ConfigMerger::merge_multiple(configs))
@@ -372,8 +407,11 @@ impl CliHandler {
 
     async fn execute_redis(command: &str, config: Config) -> Result<()> {
         let tunnel = config.tunnel.clone();
-        let req = RedisRequest::from_config(config, command.to_string())?;
+        let max_timeout_secs = Self::load_max_timeout_secs()?;
+        let mut req = RedisRequest::from_config(config, command.to_string())?;
+        req.max_timeout_secs = max_timeout_secs;
         let result = RedisOrchestrator::execute(req, tunnel).await?;
+        Self::print_warnings(&result);
         let output = CliFormatter::format(&result);
         println!("{output}");
         Ok(())
@@ -390,6 +428,7 @@ impl CliHandler {
         key_path: Option<std::path::PathBuf>,
         include_headers: bool,
     ) -> Result<()> {
+        let max_timeout_secs = Self::load_max_timeout_secs()?;
         let req = SshExecRequest {
             host,
             port,
@@ -397,10 +436,13 @@ impl CliHandler {
             password,
             key_path,
             command,
+            timeout_secs: cli.timeout,
+            max_timeout_secs,
         };
 
         let tunnel_config = Self::cli_to_tunnel_config(cli)?;
         let result = SshDirectOrchestrator::execute(req, tunnel_config).await?;
+        Self::print_warnings(&result);
 
         if include_headers {
             println!("{}", CliFormatter::format(&result));
@@ -492,6 +534,7 @@ impl CliHandler {
             (Some(_), Some(_)) => unreachable!("clap conflicts_with prevents this"),
         };
 
+        let max_timeout_secs = Self::load_max_timeout_secs()?;
         let req = HttpRequestSpec {
             method,
             url,
@@ -499,10 +542,13 @@ impl CliHandler {
             body,
             auth,
             insecure,
+            timeout_secs: cli.timeout,
+            max_timeout_secs,
         };
 
         let tunnel_config = Self::cli_to_tunnel_config(cli)?;
         let result = HttpOrchestrator::execute(req, tunnel_config).await?;
+        Self::print_warnings(&result);
 
         if include_headers {
             println!("{}", CliFormatter::format(&result));

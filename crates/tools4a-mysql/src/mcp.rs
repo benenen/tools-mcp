@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::path::PathBuf;
-use tools4a_core::config::{Config, ConfigLoader, ConfigMerger, Profile, ServiceType};
+use tools4a_core::config::{Config, ConfigLoader, ConfigMerger, Profile, ServiceType, TomlConfig};
 use tools4a_core::{
     Error, ExecutionResult, McpTool, Result, Service, SshJumpInput, TunnelKind, build_tunnel_config,
 };
@@ -46,6 +46,12 @@ pub struct MysqlExecParams {
     pub ssh_key_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ssh_port: Option<u16>,
+
+    /// Per-call execution timeout in seconds. Capped by the operator's
+    /// `TOOLS4A_MAX_TIMEOUT_SECS` env var or TOML `[defaults]`. When
+    /// unset, the service default applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_secs: Option<u64>,
 }
 
 pub struct MysqlMcp;
@@ -61,19 +67,29 @@ impl McpTool for MysqlMcp {
     async fn invoke(params: MysqlExecParams) -> Result<ExecutionResult> {
         let allow_write = params.allow_write;
         let query = params.query.clone();
-        let config = params_to_config(&params)?;
+        let toml = ConfigLoader::load_default_toml()?;
+        let max_timeout_secs = toml.as_ref().and_then(toml_max_timeout);
+        let config = params_to_config(&params, toml)?;
         let tunnel = config.tunnel.clone();
         let mut req = MysqlRequest::from_config(config, query)?;
+        if let Some(ts) = params.timeout_secs {
+            req.timeout_secs = Some(ts);
+        }
+        req.max_timeout_secs = max_timeout_secs;
         req.allow_write = allow_write;
         MysqlOrchestrator::execute(req, tunnel).await
     }
 }
 
-fn params_to_config(p: &MysqlExecParams) -> Result<Config> {
+fn toml_max_timeout(toml: &TomlConfig) -> Option<u64> {
+    toml.defaults.max_timeout_secs
+}
+
+fn params_to_config(p: &MysqlExecParams, toml: Option<TomlConfig>) -> Result<Config> {
     let mut configs: Vec<Config> = Vec::new();
 
     if let Some(profile_name) = &p.profile {
-        let toml_config = ConfigLoader::load_default_toml()?.ok_or_else(|| {
+        let toml_config = toml.ok_or_else(|| {
             Error::Config(format!(
                 "profile '{profile_name}' requested but no ~/.config/tools4a/config.toml found"
             ))
@@ -107,6 +123,7 @@ fn params_to_config(p: &MysqlExecParams) -> Result<Config> {
         db: None,
         key_path: None,
         tunnel: tunnel_config,
+        timeout_secs: p.timeout_secs,
     });
 
     Ok(ConfigMerger::merge_multiple(configs))
@@ -123,6 +140,7 @@ fn profile_to_config(profile: &Profile) -> Config {
         db: profile.db,
         key_path: profile.key_path.clone(),
         tunnel: profile.tunnel.clone(),
+        timeout_secs: profile.timeout_secs,
     }
 }
 
@@ -147,6 +165,7 @@ mod tests {
             ssh_password: None,
             ssh_key_path: None,
             ssh_port: None,
+            timeout_secs: None,
         }
     }
 
@@ -158,10 +177,22 @@ mod tests {
             user: Some("alice".into()),
             ..empty_params()
         };
-        let cfg = params_to_config(&p).unwrap();
+        let cfg = params_to_config(&p, None).unwrap();
         assert_eq!(cfg.host.as_deref(), Some("db.example.com"));
         assert_eq!(cfg.port, Some(3307));
         assert_eq!(cfg.user.as_deref(), Some("alice"));
+    }
+
+    #[test]
+    fn timeout_secs_flows_into_config() {
+        let p = MysqlExecParams {
+            host: Some("h".into()),
+            user: Some("u".into()),
+            timeout_secs: Some(7),
+            ..empty_params()
+        };
+        let cfg = params_to_config(&p, None).unwrap();
+        assert_eq!(cfg.timeout_secs, Some(7));
     }
 
     #[test]

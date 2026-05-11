@@ -8,7 +8,15 @@
 use crate::execute as ssh_execute;
 use crate::request::{SshExecRequest, SshJumpsConfig};
 use async_trait::async_trait;
-use tools4a_core::{Error, ExecutionResult, Result, Service, TunnelConfig};
+use tools4a_core::{
+    Error, ExecutionResult, Result, Service, TunnelConfig, apply_with_timeout,
+    resolve_effective_timeout,
+};
+
+/// Service default for the per-call execution timeout. Shell commands
+/// over SSH can be long-running (builds, log tails) — keep this generous
+/// and rely on the operator-set max for an absolute ceiling.
+pub const DEFAULT_TIMEOUT_SECS: u64 = 300;
 
 pub struct SshDirectOrchestrator;
 
@@ -25,6 +33,9 @@ impl Service for SshDirectOrchestrator {
                 "SSH target requires --password or --key-path".to_string(),
             ));
         }
+
+        let deadline =
+            resolve_effective_timeout(req.timeout_secs, DEFAULT_TIMEOUT_SECS, req.max_timeout_secs);
 
         let jumps = match tunnel_config {
             None | Some(TunnelConfig::Direct) => None,
@@ -43,7 +54,11 @@ impl Service for SshDirectOrchestrator {
             }),
         };
 
-        ssh_execute(req, jumps).await
+        let mut result = apply_with_timeout(deadline, ssh_execute(req, jumps)).await?;
+        if let Some(w) = deadline.clamp_warning() {
+            result.push_warning(w);
+        }
+        Ok(result)
     }
 }
 
@@ -59,6 +74,8 @@ mod tests {
             password: None,
             key_path: None,
             command: "ls".to_string(),
+            timeout_secs: None,
+            max_timeout_secs: None,
         }
     }
 

@@ -30,4 +30,9 @@ pub struct HttpRequestSpec {
     pub auth: HttpAuth,
     /// If true, accept invalid TLS certs (e.g. self-signed). Default: false.
     pub insecure: bool,
+    /// Caller-requested execution timeout (seconds). `None` → service default.
+    pub timeout_secs: Option<u64>,
+    /// Operator-side ceiling pulled from TOML `[defaults]` by the
+    /// CLI/MCP layer. Env var still wins over this.
+    pub max_timeout_secs: Option<u64>,
 }

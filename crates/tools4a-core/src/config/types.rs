@@ -44,12 +44,31 @@ pub struct Profile {
     pub db: Option<u32>,
     pub key_path: Option<String>,
     pub tunnel: Option<TunnelConfig>,
+    /// Per-profile default for the caller-facing execution timeout
+    /// (seconds). Lower precedence than CLI `--timeout` / MCP
+    /// `timeout_secs`; subject to the global `max_timeout_secs` ceiling.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_secs: Option<u64>,
+}
+
+/// Top-level `[defaults]` block in `~/.config/tools4a/config.toml`.
+/// Operator-side knobs that apply globally (not per profile).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DefaultsConfig {
+    /// Hard ceiling for per-call execution timeouts (seconds). The
+    /// `TOOLS4A_MAX_TIMEOUT_SECS` env var takes precedence over this.
+    /// When unset in both, the built-in `DEFAULT_MAX_TIMEOUT_SECS`
+    /// (1 hour) applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_timeout_secs: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TomlConfig {
     #[serde(default)]
     pub profiles: std::collections::HashMap<String, Profile>,
+    #[serde(default)]
+    pub defaults: DefaultsConfig,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -65,6 +84,10 @@ pub struct Config {
     pub db: Option<u32>,
     pub key_path: Option<String>,
     pub tunnel: Option<TunnelConfig>,
+    /// Per-call execution timeout (seconds), as merged from
+    /// profile/YAML/CLI. `None` means "use the service default".
+    #[serde(default)]
+    pub timeout_secs: Option<u64>,
 }
 
 #[cfg(test)]

@@ -5,7 +5,13 @@ use crate::execute::MongoParams;
 use async_trait::async_trait;
 use tools4a_core::config::Config;
 use tools4a_core::readonly::is_readonly_mongo;
-use tools4a_core::{Error, ExecutionResult, Result, Service, TunnelConfig, build_tunnel};
+use tools4a_core::{
+    Error, ExecutionResult, Result, Service, TunnelConfig, apply_with_timeout, build_tunnel,
+    resolve_effective_timeout,
+};
+
+/// Service default for the per-call execution timeout.
+pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
 
 #[derive(Debug, Clone)]
 pub struct MongoRequest {
@@ -16,6 +22,8 @@ pub struct MongoRequest {
     pub database: String,
     pub command: String,
     pub allow_write: bool,
+    pub timeout_secs: Option<u64>,
+    pub max_timeout_secs: Option<u64>,
 }
 
 impl MongoRequest {
@@ -36,6 +44,8 @@ impl MongoRequest {
             database,
             command,
             allow_write: false,
+            timeout_secs: config.timeout_secs,
+            max_timeout_secs: None,
         })
     }
 }
@@ -58,6 +68,9 @@ impl Service for MongoOrchestrator {
             ));
         }
 
+        let deadline =
+            resolve_effective_timeout(req.timeout_secs, DEFAULT_TIMEOUT_SECS, req.max_timeout_secs);
+
         let tunnel = build_tunnel(req.host.clone(), req.port, tunnel_config)?;
 
         let params = MongoParams {
@@ -66,7 +79,12 @@ impl Service for MongoOrchestrator {
             database: req.database,
         };
 
-        mongo_execute(tunnel, params, &req.command).await
+        let mut result =
+            apply_with_timeout(deadline, mongo_execute(tunnel, params, &req.command)).await?;
+        if let Some(w) = deadline.clamp_warning() {
+            result.push_warning(w);
+        }
+        Ok(result)
     }
 }
 
@@ -104,6 +122,8 @@ mod tests {
             database: "test".to_string(),
             command: r#"{"insert":"t","documents":[{"x":1}]}"#.to_string(),
             allow_write: false,
+            timeout_secs: None,
+            max_timeout_secs: None,
         };
         let err = MongoOrchestrator::execute(req, None).await.unwrap_err();
         assert!(matches!(err, Error::Service(ref msg) if msg.contains("--allow-write")));

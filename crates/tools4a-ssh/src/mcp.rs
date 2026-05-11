@@ -7,6 +7,7 @@ use crate::request::SshExecRequest;
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Deserialize;
+use tools4a_core::config::ConfigLoader;
 use tools4a_core::{
     Error, ExecutionResult, McpTool, Result, Service, SshJumpInput, TunnelKind, build_tunnel_config,
 };
@@ -38,6 +39,11 @@ pub struct SshExecParams {
     pub ssh_key_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ssh_port: Option<u16>,
+
+    /// Per-call execution timeout in seconds. Capped by the operator's
+    /// `TOOLS4A_MAX_TIMEOUT_SECS` env var or TOML `[defaults]`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_secs: Option<u64>,
 }
 
 pub struct SshMcp;
@@ -51,7 +57,10 @@ impl McpTool for SshMcp {
     type Params = SshExecParams;
 
     async fn invoke(params: SshExecParams) -> Result<ExecutionResult> {
-        let (req, tunnel) = params_to_request_and_tunnel(params)?;
+        let max_timeout_secs =
+            ConfigLoader::load_default_toml()?.and_then(|t| t.defaults.max_timeout_secs);
+        let (mut req, tunnel) = params_to_request_and_tunnel(params)?;
+        req.max_timeout_secs = max_timeout_secs;
         SshDirectOrchestrator::execute(req, tunnel).await
     }
 }
@@ -72,6 +81,8 @@ fn params_to_request_and_tunnel(
         password: p.password,
         key_path: p.key_path.map(std::path::PathBuf::from),
         command: p.command,
+        timeout_secs: p.timeout_secs,
+        max_timeout_secs: None,
     };
 
     let tunnel_config = build_tunnel_config(
@@ -105,6 +116,7 @@ mod tests {
             ssh_password: None,
             ssh_key_path: None,
             ssh_port: None,
+            timeout_secs: None,
         };
         let (req, tunnel) = params_to_request_and_tunnel(p).unwrap();
         assert_eq!(req.command, "uptime");
@@ -127,6 +139,7 @@ mod tests {
             ssh_password: None,
             ssh_key_path: None,
             ssh_port: None,
+            timeout_secs: None,
         };
         let err = params_to_request_and_tunnel(p).unwrap_err();
         assert!(matches!(err, Error::Config(ref msg) if msg.contains("mutually exclusive")));

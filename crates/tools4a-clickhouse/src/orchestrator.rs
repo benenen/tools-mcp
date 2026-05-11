@@ -6,7 +6,14 @@ use crate::execute::ClickhouseParams;
 use async_trait::async_trait;
 use tools4a_core::config::Config;
 use tools4a_core::readonly::is_readonly_sql;
-use tools4a_core::{Error, ExecutionResult, Result, Service, TunnelConfig, build_tunnel};
+use tools4a_core::{
+    Error, ExecutionResult, Result, Service, TunnelConfig, apply_with_timeout, build_tunnel,
+    resolve_effective_timeout,
+};
+
+/// Service default for the per-call execution timeout. Analytic queries
+/// can run a bit longer than transactional ones — keep this generous.
+pub const DEFAULT_TIMEOUT_SECS: u64 = 60;
 
 #[derive(Debug, Clone)]
 pub struct ClickhouseRequest {
@@ -17,6 +24,8 @@ pub struct ClickhouseRequest {
     pub database: Option<String>,
     pub query: String,
     pub allow_write: bool,
+    pub timeout_secs: Option<u64>,
+    pub max_timeout_secs: Option<u64>,
 }
 
 impl ClickhouseRequest {
@@ -39,6 +48,8 @@ impl ClickhouseRequest {
             database: config.database,
             query,
             allow_write: false,
+            timeout_secs: config.timeout_secs,
+            max_timeout_secs: None,
         })
     }
 }
@@ -61,6 +72,9 @@ impl Service for ClickhouseOrchestrator {
             ));
         }
 
+        let deadline =
+            resolve_effective_timeout(req.timeout_secs, DEFAULT_TIMEOUT_SECS, req.max_timeout_secs);
+
         let tunnel = build_tunnel(req.host.clone(), req.port, tunnel_config)?;
 
         let params = ClickhouseParams {
@@ -69,7 +83,16 @@ impl Service for ClickhouseOrchestrator {
             database: req.database,
         };
 
-        clickhouse_execute(tunnel, params, &req.query, !req.allow_write).await
+        let read_only = !req.allow_write;
+        let mut result = apply_with_timeout(
+            deadline,
+            clickhouse_execute(tunnel, params, &req.query, read_only),
+        )
+        .await?;
+        if let Some(w) = deadline.clamp_warning() {
+            result.push_warning(w);
+        }
+        Ok(result)
     }
 }
 
@@ -125,6 +148,8 @@ mod tests {
             database: None,
             query: "INSERT INTO t VALUES (1)".to_string(),
             allow_write: false,
+            timeout_secs: None,
+            max_timeout_secs: None,
         };
         let err = ClickhouseOrchestrator::execute(req, None)
             .await

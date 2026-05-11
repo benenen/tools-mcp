@@ -19,6 +19,11 @@ pub struct SshExecRequest {
     pub key_path: Option<std::path::PathBuf>,
     /// Shell command to execute on the target.
     pub command: String,
+    /// Caller-requested execution timeout (seconds). `None` → service default.
+    pub timeout_secs: Option<u64>,
+    /// Operator-side ceiling pulled from TOML `[defaults]` by the
+    /// CLI/MCP layer. Env var still wins over this.
+    pub max_timeout_secs: Option<u64>,
 }
 
 /// Optional SSH-jump config: a chain of bastion hosts plus the credentials

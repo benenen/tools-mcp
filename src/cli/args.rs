@@ -27,6 +27,18 @@ pub struct Cli {
     #[arg(long, global = true, help_heading = "Global Options")]
     pub config: Option<PathBuf>,
 
+    /// Per-call execution timeout in seconds. Capped by
+    /// TOOLS4A_MAX_TIMEOUT_SECS or `[defaults] max_timeout_secs` in
+    /// ~/.config/tools4a/config.toml. When unset, each service applies
+    /// its own default (SQL: 30s, Redis: 10s, HTTP: 60s, SSH: 300s).
+    #[arg(
+        long,
+        global = true,
+        value_name = "SECS",
+        help_heading = "Global Options"
+    )]
+    pub timeout: Option<u64>,
+
     /// Tunnel type (direct or ssh)
     #[arg(long, global = true, value_enum, help_heading = "Tunnel")]
     pub tunnel: Option<TunnelKind>,

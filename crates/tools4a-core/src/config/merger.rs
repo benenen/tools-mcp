@@ -14,6 +14,7 @@ impl ConfigMerger {
             db: override_cfg.db.or(base.db),
             key_path: override_cfg.key_path.or(base.key_path),
             tunnel: override_cfg.tunnel.or(base.tunnel),
+            timeout_secs: override_cfg.timeout_secs.or(base.timeout_secs),
         }
     }
 

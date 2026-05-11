@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::path::PathBuf;
-use tools4a_core::config::{Config, ConfigLoader, ConfigMerger, Profile, ServiceType};
+use tools4a_core::config::{Config, ConfigLoader, ConfigMerger, Profile, ServiceType, TomlConfig};
 use tools4a_core::{
     Error, ExecutionResult, McpTool, Result, Service, SshJumpInput, TunnelKind, build_tunnel_config,
 };
@@ -44,6 +44,11 @@ pub struct ClickhouseExecParams {
     pub ssh_key_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ssh_port: Option<u16>,
+
+    /// Per-call execution timeout in seconds. Capped by the operator's
+    /// `TOOLS4A_MAX_TIMEOUT_SECS` env var or TOML `[defaults]`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_secs: Option<u64>,
 }
 
 pub struct ClickhouseMcp;
@@ -58,19 +63,25 @@ impl McpTool for ClickhouseMcp {
     async fn invoke(params: ClickhouseExecParams) -> Result<ExecutionResult> {
         let allow_write = params.allow_write;
         let query = params.query.clone();
-        let config = params_to_config(&params)?;
+        let toml = ConfigLoader::load_default_toml()?;
+        let max_timeout_secs = toml.as_ref().and_then(|t| t.defaults.max_timeout_secs);
+        let config = params_to_config(&params, toml)?;
         let tunnel = config.tunnel.clone();
         let mut req = ClickhouseRequest::from_config(config, query)?;
+        if let Some(ts) = params.timeout_secs {
+            req.timeout_secs = Some(ts);
+        }
+        req.max_timeout_secs = max_timeout_secs;
         req.allow_write = allow_write;
         ClickhouseOrchestrator::execute(req, tunnel).await
     }
 }
 
-fn params_to_config(p: &ClickhouseExecParams) -> Result<Config> {
+fn params_to_config(p: &ClickhouseExecParams, toml: Option<TomlConfig>) -> Result<Config> {
     let mut configs: Vec<Config> = Vec::new();
 
     if let Some(profile_name) = &p.profile {
-        let toml_config = ConfigLoader::load_default_toml()?.ok_or_else(|| {
+        let toml_config = toml.ok_or_else(|| {
             Error::Config(format!(
                 "profile '{profile_name}' requested but no ~/.config/tools4a/config.toml found"
             ))
@@ -104,6 +115,7 @@ fn params_to_config(p: &ClickhouseExecParams) -> Result<Config> {
         db: None,
         key_path: None,
         tunnel: tunnel_config,
+        timeout_secs: p.timeout_secs,
     });
 
     Ok(ConfigMerger::merge_multiple(configs))
@@ -120,5 +132,6 @@ fn profile_to_config(profile: &Profile) -> Config {
         db: profile.db,
         key_path: profile.key_path.clone(),
         tunnel: profile.tunnel.clone(),
+        timeout_secs: profile.timeout_secs,
     }
 }

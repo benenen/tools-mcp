@@ -9,7 +9,13 @@
 use crate::execute as http_execute;
 use crate::request::HttpRequestSpec;
 use async_trait::async_trait;
-use tools4a_core::{Error, ExecutionResult, Result, Service, TunnelConfig, build_tunnel};
+use tools4a_core::{
+    Error, ExecutionResult, Result, Service, TunnelConfig, apply_with_timeout, build_tunnel,
+    resolve_effective_timeout,
+};
+
+/// Service default for the per-call execution timeout.
+pub const DEFAULT_TIMEOUT_SECS: u64 = 60;
 
 pub struct HttpOrchestrator;
 
@@ -41,9 +47,17 @@ impl Service for HttpOrchestrator {
             ))
         })?;
 
+        let deadline =
+            resolve_effective_timeout(req.timeout_secs, DEFAULT_TIMEOUT_SECS, req.max_timeout_secs);
+
         let tunnel = build_tunnel(url_host.clone(), url_port, tunnel_config)?;
 
-        http_execute(tunnel, url_host, url_port, req).await
+        let mut result =
+            apply_with_timeout(deadline, http_execute(tunnel, url_host, url_port, req)).await?;
+        if let Some(w) = deadline.clamp_warning() {
+            result.push_warning(w);
+        }
+        Ok(result)
     }
 }
 
@@ -60,6 +74,8 @@ mod tests {
             body: None,
             auth: HttpAuth::None,
             insecure: false,
+            timeout_secs: None,
+            max_timeout_secs: None,
         }
     }
 

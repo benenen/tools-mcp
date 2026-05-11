@@ -4,7 +4,14 @@ use crate::execute as redis_execute;
 use crate::execute::RedisParams;
 use async_trait::async_trait;
 use tools4a_core::config::Config;
-use tools4a_core::{Error, ExecutionResult, Result, Service, TunnelConfig, build_tunnel};
+use tools4a_core::{
+    Error, ExecutionResult, Result, Service, TunnelConfig, apply_with_timeout, build_tunnel,
+    resolve_effective_timeout,
+};
+
+/// Service default for the per-call execution timeout. Redis is interactive
+/// — keep this short so a hung command surfaces quickly.
+pub const DEFAULT_TIMEOUT_SECS: u64 = 10;
 
 #[derive(Debug, Clone)]
 pub struct RedisRequest {
@@ -13,6 +20,8 @@ pub struct RedisRequest {
     pub password: Option<String>,
     pub db: u32,
     pub command: String,
+    pub timeout_secs: Option<u64>,
+    pub max_timeout_secs: Option<u64>,
 }
 
 impl RedisRequest {
@@ -29,6 +38,8 @@ impl RedisRequest {
             password: config.password,
             db,
             command,
+            timeout_secs: config.timeout_secs,
+            max_timeout_secs: None,
         })
     }
 }
@@ -43,6 +54,9 @@ impl Service for RedisOrchestrator {
         req: RedisRequest,
         tunnel_config: Option<TunnelConfig>,
     ) -> Result<ExecutionResult> {
+        let deadline =
+            resolve_effective_timeout(req.timeout_secs, DEFAULT_TIMEOUT_SECS, req.max_timeout_secs);
+
         let tunnel = build_tunnel(req.host.clone(), req.port, tunnel_config)?;
 
         let params = RedisParams {
@@ -50,7 +64,12 @@ impl Service for RedisOrchestrator {
             db: req.db,
         };
 
-        redis_execute(tunnel, params, &req.command).await
+        let mut result =
+            apply_with_timeout(deadline, redis_execute(tunnel, params, &req.command)).await?;
+        if let Some(w) = deadline.clamp_warning() {
+            result.push_warning(w);
+        }
+        Ok(result)
     }
 }
 
