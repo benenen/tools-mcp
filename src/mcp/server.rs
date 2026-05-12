@@ -70,6 +70,31 @@ fn into_sql_call_result(
     }
 }
 
+/// HTTP variant of `into_call_result`: returns the same JSON text plus
+/// an MCP App UI resource (`ui://tools4a/http/response`, `text/html`)
+/// with a status badge, headers panel, and content-type-aware body
+/// viewer.
+fn into_http_call_result(
+    res: tools4a_core::Result<ExecutionResult>,
+) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+    match res {
+        Ok(result) => {
+            let json = serde_json::to_string_pretty(&result).map_err(|e| {
+                rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
+            })?;
+            let html = ui::render_http(&result);
+            let resource = Content::resource(ResourceContents::TextResourceContents {
+                uri: "ui://tools4a/http/response".to_string(),
+                mime_type: Some("text/html".to_string()),
+                text: html,
+                meta: None,
+            });
+            Ok(CallToolResult::success(vec![Content::text(json), resource]))
+        }
+        Err(e) => Ok(CallToolResult::error(vec![Content::text(e.to_string())])),
+    }
+}
+
 #[tool_router]
 impl ToolsMcpServer {
     pub fn new() -> Self {
@@ -135,7 +160,7 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<HttpExecParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_call_result(HttpMcp::invoke(params).await)
+        into_http_call_result(HttpMcp::invoke(params).await)
     }
 
     #[tool(
@@ -237,6 +262,44 @@ mod tests {
                 },
                 _ => panic!("expected Resource content"),
             }
+        }
+    }
+
+    fn http_result_ok() -> ExecutionResult {
+        ExecutionResult::new(
+            vec!["field".into(), "value".into()],
+            vec![
+                vec!["status_code".into(), "200".into()],
+                vec!["status".into(), "200 OK".into()],
+                vec!["header.content-type".into(), "application/json".into()],
+                vec!["body".into(), r#"{"ok":true}"#.into()],
+            ],
+            4,
+        )
+    }
+
+    #[test]
+    fn http_success_yields_text_plus_ui_resource() {
+        let call = into_http_call_result(Ok(http_result_ok())).unwrap();
+        assert_eq!(call.content.len(), 2);
+        assert_eq!(call.is_error, Some(false));
+
+        match &call.content[1].raw {
+            RawContent::Resource(embedded) => match &embedded.resource {
+                ResourceContents::TextResourceContents {
+                    uri,
+                    mime_type,
+                    text,
+                    ..
+                } => {
+                    assert_eq!(uri, "ui://tools4a/http/response");
+                    assert_eq!(mime_type.as_deref(), Some("text/html"));
+                    assert!(text.contains("<!DOCTYPE html>"));
+                    assert!(text.contains("status-2xx"));
+                }
+                _ => panic!("expected TextResourceContents"),
+            },
+            _ => panic!("expected Resource content"),
         }
     }
 
