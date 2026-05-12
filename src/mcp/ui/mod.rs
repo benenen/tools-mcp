@@ -6,3 +6,6 @@
 //! sandbox iframe.
 
 pub mod escape;
+pub mod sql_table;
+
+pub use sql_table::render_sql;
