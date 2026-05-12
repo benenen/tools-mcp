@@ -329,9 +329,7 @@ mod tests {
         let html = render_sql("mysql", &result);
         let start_tag = "<script id=\"data\" type=\"application/json\">";
         let start = html.find(start_tag).expect("data script start") + start_tag.len();
-        let end = html[start..]
-            .find("</script>")
-            .expect("data script end");
+        let end = html[start..].find("</script>").expect("data script end");
         let json = &html[start..start + end];
         // Reverse the </ -> <\/ escape we apply when embedding.
         let json = json.replace("<\\/", "</");
