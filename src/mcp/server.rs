@@ -9,6 +9,7 @@ use rmcp::{
     model::{CallToolResult, Content, ResourceContents, ServerCapabilities, ServerInfo},
     tool, tool_handler, tool_router,
 };
+use tools4a_browser::{BrowserExecParams, BrowserMcp};
 use tools4a_clickhouse::{ClickhouseExecParams, ClickhouseMcp};
 use tools4a_core::{ExecutionResult, McpTool};
 use tools4a_http::{HttpExecParams, HttpMcp};
@@ -172,6 +173,16 @@ impl ToolsMcpServer {
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
         into_call_result(SshMcp::invoke(params).await)
     }
+
+    #[tool(
+        description = "Run one `agent-browser` CLI subcommand (browser automation via the external agent-browser binary). Returns exit_code, stdout, stderr. Pass the same `session` across calls to share daemon state (cookies, pages). Phase 1: tunnel=ssh is not yet supported - use the inline workaround in the error message if needed."
+    )]
+    async fn browser_exec(
+        &self,
+        Parameters(params): Parameters<BrowserExecParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(BrowserMcp::invoke(params).await)
+    }
 }
 
 #[tool_handler]
@@ -179,10 +190,12 @@ impl ServerHandler for ToolsMcpServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
             "tools4a: unified MySQL / PostgreSQL / ClickHouse / Redis / MongoDB / \
-             HTTP / SSH tools with optional SSH tunneling. Database reads are \
-             allowed by default; writes require allow_write=true. Connection \
-             params can come from a TOML profile (~/.config/tools4a/config.toml), \
-             a YAML file, or be supplied directly in the tool call.",
+             HTTP / SSH / Browser tools with optional SSH tunneling (browser \
+             tunnel is direct-only in Phase 1; SOCKS via SSH lands in Phase 2). \
+             Database reads are allowed by default; writes require \
+             allow_write=true. Connection params can come from a TOML profile \
+             (~/.config/tools4a/config.toml), a YAML file, or be supplied \
+             directly in the tool call.",
         )
     }
 }

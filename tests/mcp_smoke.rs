@@ -47,6 +47,7 @@ fn test_mcp_lists_mysql_exec_tool() {
     let mut found_mongo = false;
     let mut found_http = false;
     let mut found_ssh = false;
+    let mut found_browser = false;
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     while std::time::Instant::now() < deadline {
         let mut line = String::new();
@@ -73,6 +74,9 @@ fn test_mcp_lists_mysql_exec_tool() {
             if line.contains("ssh_exec") {
                 found_ssh = true;
             }
+            if line.contains("browser_exec") {
+                found_browser = true;
+            }
             break;
         }
     }
@@ -81,7 +85,14 @@ fn test_mcp_lists_mysql_exec_tool() {
     let _ = child.wait_timeout(Duration::from_secs(5));
     let _ = child.kill();
 
-    if !found_mysql || !found_pgsql || !found_redis || !found_mongo || !found_http || !found_ssh {
+    if !found_mysql
+        || !found_pgsql
+        || !found_redis
+        || !found_mongo
+        || !found_http
+        || !found_ssh
+        || !found_browser
+    {
         // Capture stderr for diagnosis.
         let mut err_buf = String::new();
         std::io::Read::read_to_string(&mut BufReader::new(stderr), &mut err_buf).ok();
@@ -94,6 +105,7 @@ fn test_mcp_lists_mysql_exec_tool() {
     assert!(found_mongo, "tools/list missing mongo_exec");
     assert!(found_http, "tools/list missing http_exec");
     assert!(found_ssh, "tools/list missing ssh_exec");
+    assert!(found_browser, "tools/list missing browser_exec");
 }
 
 trait WaitTimeoutExt {
