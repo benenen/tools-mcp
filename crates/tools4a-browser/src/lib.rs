@@ -5,6 +5,8 @@
 //! CLI invocation against that persistent daemon, captured as an
 //! `ExecutionResult` (stdout / stderr / exit_code).
 
+pub mod exec;
 pub mod request;
 
+pub use exec::{BrowserExec, BrowserOutput, output_to_result, resolve_bin};
 pub use request::BrowserRequest;
