@@ -1,6 +1,6 @@
 ---
 name: browser-using
-description: Use when calling the `browser_exec` MCP tool from tools4a — explains the agent-browser daemon model, session reuse, proxy passthrough, output mapping (exit_code/stdout/stderr), the Phase 1 SSH-tunnel deferral with its `ssh -D` workaround, and the install-it-yourself prerequisite.
+description: Use when calling the `browser_exec` MCP tool from tools4a — explains the agent-browser daemon model, session reuse, proxy passthrough, output mapping (exit_code/stdout/stderr), SSH tunneling via the built-in SOCKS5 server, and the install-it-yourself prerequisite.
 ---
 
 # Using the `browser_exec` MCP tool
@@ -51,14 +51,18 @@ ExecutionResult (3 rows, `field`/`value` columns):
 
 On success: show `stdout` (parse as JSON if it starts with `{` or `[`). On failure (`exit_code != 0`): show `stderr` — it carries agent-browser's structured error message (page not loaded, selector not found, etc.).
 
-## Tunneling to internal HTTPS (Phase 1 workaround)
+## Tunneling via SSH (built-in SOCKS5)
 
-Phase 1 does NOT support `tunnel = "ssh"` for the browser — the existing single-port `direct-tcpip` tunnel doesn't fit a full browser (cookies / SNI / Host header / sub-resources). If the user needs to reach an internal HTTPS service through a bastion:
+Set `tunnel = "ssh"` plus the usual `ssh_jump` / `ssh_user` / etc. fields and tools4a will:
 
-1. They run `ssh -D 1080 <bastion>` themselves in a separate terminal, keeping it open.
-2. Pass `"proxy": "socks5://127.0.0.1:1080"` to `browser_exec`.
+1. Build an SSH session chain to the bastion(s) — same `build_session_chain` helper the other six tools use.
+2. Bind a SOCKS5 listener on `127.0.0.1:<random>`. Each accepted SOCKS5 CONNECT opens a fresh `direct-tcpip` channel through the SSH chain — the bastion does the actual TCP connect and DNS resolution.
+3. Inject `--proxy socks5://127.0.0.1:<random>` into the `agent-browser` invocation. Chrome / agent-browser routes ALL of the page's traffic (HTTP, HTTPS, sub-resources, websockets) through that proxy, so internal HTTPS services with valid certs work without any tools4a-side TLS handling.
+4. Tear the tunnel down on exit (close the listener, drop the SSH session).
 
-Phase 2 will fold the SOCKS server into tools4a so `tunnel = "ssh"` works for browser directly. If a user asks for `tunnel = "ssh"` today, you'll get an `Error::Config` whose message itself contains the workaround (no skill lookup needed at the point of failure).
+**Conflict**: if `tunnel = "ssh"` AND `proxy = ...` are BOTH set, tools4a returns `Error::Config("conflict ...")` — pick one (drop `proxy` and let tools4a inject its own, or use `tunnel = "direct"` with your own proxy). Silently overriding would mask a likely user mistake.
+
+**Manual workaround (still works)**: if you want to keep the SSH listener separately (e.g. multiple tools sharing one bastion), set `tunnel = "direct"` and `proxy = "socks5://127.0.0.1:1080"` after starting `ssh -D 1080 <bastion>` yourself. The inline `tunnel = "ssh"` form is preferred for browser-only use because tools4a owns the listener lifecycle.
 
 ## Destructive subcommands — confirm first
 
@@ -77,5 +81,5 @@ When in doubt: prefer `snapshot` first to confirm what's on the page, then act.
 
 - Not for embedding a browser inside tools4a — agent-browser is external.
 - Not for installing or upgrading agent-browser — tell the user to run their own install if missing.
-- Not for SOCKS tunneling through SSH (Phase 2). For now, instruct the user to set up `ssh -D` themselves and use `--proxy`.
+- Not a proxy for arbitrary clients — the SOCKS5 listener tools4a binds for `tunnel = "ssh"` is **per-call** (torn down when `browser_exec` returns). If you need a persistent SOCKS proxy, use `ssh -D` directly.
 - Not for `playwright` / `puppeteer` directly — those have their own MCP servers; this skill is specifically for the agent-browser surface.

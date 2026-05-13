@@ -16,7 +16,7 @@ description: Use when calling any of the eight tools4a MCP tools (`mysql_exec` /
 | `mongo_exec` | `command` + `host` + `database` | yes | yes |
 | `http_exec` | `method` + `url` | yes | no |
 | `ssh_exec` | `command` + `host` + `user` + (`password` OR `key_path`) | yes | no |
-| `browser_exec` | `subcommand` | direct only (Phase 1) | no |
+| `browser_exec` | `subcommand` | yes (SOCKS5 over SSH) | no |
 
 ## Tool input shapes
 
@@ -52,8 +52,9 @@ description: Use when calling any of the eight tools4a MCP tools (`mysql_exec` /
 // browser_exec — shells out to agent-browser; sessions persist across calls
 { "subcommand": "open", "args": ["https://example.com"], "session": "work" }
 { "subcommand": "snapshot", "session": "work" }
-// Phase 1: tunnel="ssh" returns an error with the inline `ssh -D 1080` workaround.
-// Until Phase 2 ships, route via your own SOCKS: pass `proxy: "socks5://..."`.
+// tunnel="ssh" works: tools4a binds a per-call SOCKS5 listener over the
+// SSH chain and injects --proxy socks5://127.0.0.1:<rand> into agent-browser.
+// If you set BOTH tunnel=ssh AND an explicit proxy, that's Error::Config (conflict).
 ```
 
 All four tools also accept the same tunnel fields:
@@ -171,7 +172,7 @@ Read-only operations (`SELECT`, `GET` / `EXISTS` / `INFO`, `GET` / `HEAD`, `ls` 
 - `Error::Execution("failed to parse Redis command (unbalanced quotes?)")` — shlex parsing failed.
 - `Error::Execution("failed to parse Mongo command as JSON: ...")` / `("failed to convert command JSON to BSON: ...")` / `("Mongo command must be a JSON object")` — mongo_exec command string is not valid JSON, not a JSON object, or cannot be converted to BSON.
 - `Error::Config("agent-browser binary not found ...")` — operator must install agent-browser separately (`npm i -g agent-browser` or upstream Rust build). Don't auto-install.
-- `Error::Config("tunnel=ssh is not supported for the browser tool in Phase 1 ...")` — Phase 2 will fix this; the error message itself contains the `ssh -D 1080` + `--proxy socks5://...` workaround.
+- `Error::Config("tunnel=ssh and an explicit `proxy` field conflict ...")` — user set BOTH `tunnel=ssh` AND `proxy=...` on `browser_exec`. tools4a injects its own `--proxy socks5://...` from the SOCKS tunnel endpoint when ssh is set; pick one or the other.
 - Any `SSH tunnel ... failed` / multi-hop drop → escalate to `ssh-bastion-checklist`.
 - MySQL-specific (1045 / 1146 / 1062 / deadlock / slow query / processlist) → escalate to `mysql-debugging`.
 - Browser-specific (agent-browser daemon issues, selector mismatches, page-load failures) → escalate to `browser-using`.
