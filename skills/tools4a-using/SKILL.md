@@ -1,20 +1,22 @@
 ---
 name: tools4a-using
-description: Use when calling any of the six tools4a MCP tools (`mysql_exec` / `pgsql_exec` / `redis_exec` / `mongo_exec` / `http_exec` / `ssh_exec`). Covers parameter shape per service, three-layer config priority (mysql/pgsql/redis/mongo), SSH tunnel syntax (single + multi-hop), output mapping, destructive-command list, and common error shapes.
+description: Use when calling any of the eight tools4a MCP tools (`mysql_exec` / `pgsql_exec` / `clickhouse_exec` / `redis_exec` / `mongo_exec` / `http_exec` / `ssh_exec` / `browser_exec`). Covers parameter shape per service, three-layer config priority (mysql/pgsql/clickhouse/redis/mongo), SSH tunnel syntax (single + multi-hop), output mapping, destructive-command list, and common error shapes.
 ---
 
 # Using the tools4a MCP tools
 
-`tools4a` exposes six MCP tools — one per service. All six return a `{columns, rows, affected_rows}` ExecutionResult and accept tunnel fields. MySQL, PostgreSQL, Redis, and MongoDB additionally accept `profile` / `config` for 3-layer config merge; HTTP and SSH-direct take their fields directly.
+`tools4a` exposes eight MCP tools — one per service. All eight return a `{columns, rows, affected_rows}` ExecutionResult and accept tunnel fields. MySQL, PostgreSQL, ClickHouse, Redis, and MongoDB additionally accept `profile` / `config` for 3-layer config merge; HTTP, SSH-direct, and Browser take their fields directly. Browser also requires the external `agent-browser` binary to be installed separately on the host running tools4a.
 
 | Tool | Required input | Tunnel | Profile/YAML |
 | --- | --- | --- | --- |
 | `mysql_exec` | `query` + `host` + `user` | yes | yes |
 | `pgsql_exec` | `query` + `host` + `user` | yes | yes |
+| `clickhouse_exec` | `query` + `host` | yes | yes |
 | `redis_exec` | `command` + `host` | yes | yes |
 | `mongo_exec` | `command` + `host` + `database` | yes | yes |
 | `http_exec` | `method` + `url` | yes | no |
 | `ssh_exec` | `command` + `host` + `user` + (`password` OR `key_path`) | yes | no |
+| `browser_exec` | `subcommand` | direct only (Phase 1) | no |
 
 ## Tool input shapes
 
@@ -42,6 +44,16 @@ description: Use when calling any of the six tools4a MCP tools (`mysql_exec` / `
 
 // ssh_exec — TARGET creds (user/password/key_path) separate from JUMP creds (ssh_*)
 { "command": "uptime", "host": "server", "user": "admin", "key_path": "/home/me/.ssh/id_rsa" }
+
+// clickhouse_exec — SQL over HTTP, default port 8123, default user "default"
+{ "query": "SELECT 1", "host": "ch", "user": "default" }
+{ "query": "SELECT count() FROM events", "profile": "prod-ch" }
+
+// browser_exec — shells out to agent-browser; sessions persist across calls
+{ "subcommand": "open", "args": ["https://example.com"], "session": "work" }
+{ "subcommand": "snapshot", "session": "work" }
+// Phase 1: tunnel="ssh" returns an error with the inline `ssh -D 1080` workaround.
+// Until Phase 2 ships, route via your own SOCKS: pass `proxy: "socks5://..."`.
 ```
 
 All four tools also accept the same tunnel fields:
@@ -99,6 +111,10 @@ For **`http_exec`** through SSH: TLS SNI / Host header / cert verification all u
 
 **ssh_exec** — three rows: `exit_code` (`0` = success; `<unknown>` if channel closed without exit status, treat as failure), `stdout`, `stderr`.
 
+**clickhouse_exec** — standard `{columns, rows, affected_rows}` like mysql/pgsql. Result comes from ClickHouse's HTTP interface; DDL/DML returns empty rows + non-zero affected_rows.
+
+**browser_exec** — three rows: `exit_code` (`0` = success), `stdout` (agent-browser's stdout, often JSON for structured subcommands like `snapshot`), `stderr` (diagnostic if any). Parse `stdout` as JSON when the subcommand documents JSON output; otherwise treat as plain text.
+
 ## Write gating (`allow_write`) — mysql_exec / pgsql_exec / mongo_exec
 
 These three tools are **read-only by default**. Any write attempt is
@@ -121,8 +137,14 @@ without --allow-write (CLI) / allow_write=true (MCP)")`. Pass
   `create`, `createIndexes`, aggregate-with-`$out`/`$merge`) need
   `allow_write: true`. Mongo has no per-session read-only mode, so the
   command whitelist is the only guard.
-- **redis_exec / http_exec / ssh_exec**: NOT gated. They accept any
-  command/method without `allow_write`.
+- **clickhouse_exec**: same SQL-keyword whitelist as mysql/pgsql plus
+  ClickHouse-specific reads (`DESCRIBE TABLE`, `SHOW DATABASES`, etc.).
+  When `allow_write=false` the HTTP call also sets `readonly=1` on the
+  server side as a second line of defense.
+- **redis_exec / http_exec / ssh_exec / browser_exec**: NOT gated. They
+  accept any command/method without `allow_write` — Redis is
+  shell-shaped, HTTP/SSH encode write semantics in their method/command,
+  and browser actions are external-side-effect rather than tools4a-side.
 
 ## Destructive commands — confirm with the user FIRST
 
@@ -135,6 +157,8 @@ still confirm before running anything destructive:
 - **mongo_exec**: `drop` (collection drop), `dropDatabase`, `delete` with broad filter, `update` with `"multi": true` + broad filter, `findAndModify` with `"remove": true`, admin commands `createUser` / `dropUser` / `grantRolesToUser`.
 - **http_exec**: `POST` / `PUT` / `DELETE` / `PATCH`. Watch for missing `data` — user may have typed POST when they meant GET.
 - **ssh_exec**: `rm` / `find ... -delete`, `mv` overwrite, `dd`, `mkfs.*`, `systemctl restart` / `reboot` / `shutdown`, `apt install` / `apt remove`, `kill -9` / `pkill`, anything starting with `sudo`.
+- **clickhouse_exec**: `DROP`, `TRUNCATE`, `DELETE FROM`, `ALTER ... DROP`, `OPTIMIZE FINAL` (rewrites parts), `DETACH PARTITION`. ClickHouse-specific: avoid running `SELECT * FROM huge_table` without `LIMIT` on prod — the query streams the whole table over HTTP.
+- **browser_exec**: `fill` / `type` on prod forms (PII), `click` on irreversible buttons (Submit, Delete, Pay), `eval` (arbitrary JS — always confirm), `network route` / `unroute` (rewrites traffic), `cookies` / `storage` writes. Prefer `snapshot` first to confirm page state before any state-changing subcommand. For per-service details see `browser-using`.
 
 Read-only operations (`SELECT`, `GET` / `EXISTS` / `INFO`, `GET` / `HEAD`, `ls` / `cat` / `df` / `ps` / `systemctl status` / `journalctl`) are safe to run without a confirmation prompt.
 
@@ -146,8 +170,11 @@ Read-only operations (`SELECT`, `GET` / `EXISTS` / `INFO`, `GET` / `HEAD`, `ls` 
 - `Error::Connection("SSH connect ... failed")` / `("SSH publickey/password auth failed")` — wrong creds or unreachable host. For `ssh_exec`: jump creds vs target creds are separate.
 - `Error::Execution("failed to parse Redis command (unbalanced quotes?)")` — shlex parsing failed.
 - `Error::Execution("failed to parse Mongo command as JSON: ...")` / `("failed to convert command JSON to BSON: ...")` / `("Mongo command must be a JSON object")` — mongo_exec command string is not valid JSON, not a JSON object, or cannot be converted to BSON.
+- `Error::Config("agent-browser binary not found ...")` — operator must install agent-browser separately (`npm i -g agent-browser` or upstream Rust build). Don't auto-install.
+- `Error::Config("tunnel=ssh is not supported for the browser tool in Phase 1 ...")` — Phase 2 will fix this; the error message itself contains the `ssh -D 1080` + `--proxy socks5://...` workaround.
 - Any `SSH tunnel ... failed` / multi-hop drop → escalate to `ssh-bastion-checklist`.
 - MySQL-specific (1045 / 1146 / 1062 / deadlock / slow query / processlist) → escalate to `mysql-debugging`.
+- Browser-specific (agent-browser daemon issues, selector mismatches, page-load failures) → escalate to `browser-using`.
 
 ## PTY / TTY limitation (ssh_exec)
 
