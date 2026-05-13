@@ -19,7 +19,7 @@ pub use mcp::{McpTool, SshJumpInput, TunnelKind, build_tunnel_config};
 pub use timeout::{
     DEFAULT_MAX_TIMEOUT_SECS, EffectiveTimeout, apply_with_timeout, resolve_effective_timeout,
 };
-pub use tunnel::{DirectTunnel, SshTunnel, build_tunnel};
+pub use tunnel::{DirectTunnel, SocksTunnel, SshTunnel, build_tunnel};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

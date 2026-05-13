@@ -5,11 +5,13 @@
 
 mod direct;
 pub mod socks;
+mod socks_tunnel;
 mod ssh;
 
 use crate::{Result, Tunnel, TunnelConfig};
 
 pub use direct::DirectTunnel;
+pub use socks_tunnel::SocksTunnel;
 pub use ssh::SshTunnel;
 
 /// Build the appropriate tunnel for a target `(host, port)` from a
