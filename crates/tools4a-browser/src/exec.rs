@@ -161,10 +161,7 @@ mod tests {
         assert_eq!(r.rows.len(), 3);
         assert_eq!(r.rows[0], vec!["exit_code".to_string(), "0".to_string()]);
         assert_eq!(r.rows[1], vec!["stdout".to_string(), "hi\n".to_string()]);
-        assert_eq!(
-            r.rows[2],
-            vec!["stderr".to_string(), "warn\n".to_string()]
-        );
+        assert_eq!(r.rows[2], vec!["stderr".to_string(), "warn\n".to_string()]);
     }
 
     #[tokio::test]

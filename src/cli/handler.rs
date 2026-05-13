@@ -1,5 +1,6 @@
 use crate::cli::{Cli, Commands, TunnelKind};
 use crate::output::CliFormatter;
+use tools4a_browser::{BrowserOrchestrator, BrowserRequest};
 use tools4a_clickhouse::{ClickhouseOrchestrator, ClickhouseRequest};
 use tools4a_core::config::{Config, ConfigLoader, ConfigMerger, ServiceType, TomlConfig};
 use tools4a_core::{Error, ExecutionResult, Result, Service, TunnelConfig};
@@ -163,6 +164,29 @@ impl CliHandler {
                     user,
                     password,
                     key_path,
+                    include_headers,
+                )
+                .await
+            }
+            Some(Commands::Browser {
+                subcommand,
+                args,
+                session,
+                proxy,
+                proxy_bypass,
+                browser_args,
+                bin,
+                include_headers,
+            }) => {
+                Self::execute_browser(
+                    &cli,
+                    subcommand,
+                    args,
+                    session,
+                    proxy,
+                    proxy_bypass,
+                    browser_args,
+                    bin,
                     include_headers,
                 )
                 .await
@@ -562,6 +586,64 @@ impl CliHandler {
                     println!("{}", CliFormatter::format(&result));
                 }
             }
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn execute_browser(
+        cli: &Cli,
+        subcommand: String,
+        args: Vec<String>,
+        session: Option<String>,
+        proxy: Option<String>,
+        proxy_bypass: Option<String>,
+        browser_args: Option<String>,
+        bin: Option<std::path::PathBuf>,
+        include_headers: bool,
+    ) -> Result<()> {
+        let req = BrowserRequest {
+            subcommand,
+            args,
+            session,
+            proxy,
+            proxy_bypass,
+            browser_args,
+            bin,
+        };
+
+        let tunnel_config = Self::cli_to_tunnel_config(cli)?;
+        let result = BrowserOrchestrator::execute(req, tunnel_config).await?;
+        Self::print_warnings(&result);
+
+        if include_headers {
+            println!("{}", CliFormatter::format(&result));
+            return Ok(());
+        }
+
+        // Default: stream stdout/stderr, exit with the agent-browser code.
+        let mut exit_code: i32 = 0;
+        for row in &result.rows {
+            if row.len() < 2 {
+                continue;
+            }
+            match row[0].as_str() {
+                "exit_code" => {
+                    exit_code = row[1].parse().unwrap_or(0);
+                }
+                "stdout" => {
+                    use std::io::Write;
+                    let _ = std::io::stdout().write_all(row[1].as_bytes());
+                }
+                "stderr" => {
+                    use std::io::Write;
+                    let _ = std::io::stderr().write_all(row[1].as_bytes());
+                }
+                _ => {}
+            }
+        }
+        if exit_code != 0 {
+            std::process::exit(exit_code);
         }
         Ok(())
     }

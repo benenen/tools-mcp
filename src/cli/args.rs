@@ -339,6 +339,46 @@ pub enum Commands {
         #[arg(long = "include-headers", short = 'i', help_heading = "SSH")]
         include_headers: bool,
     },
+
+    /// Run an agent-browser CLI subcommand (browser automation)
+    #[command(override_usage = "tools4a [GLOBAL OPTIONS] browser [OPTIONS] <SUBCOMMAND> [ARGS]...")]
+    #[command(after_help = USAGE_LEGEND)]
+    Browser {
+        /// agent-browser subcommand (e.g. open, click, snapshot, batch, eval, screenshot).
+        subcommand: String,
+
+        /// Arguments passed after <SUBCOMMAND> verbatim to agent-browser.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+
+        /// agent-browser --session NAME (isolates daemon state).
+        #[arg(long, help_heading = "Browser")]
+        session: Option<String>,
+
+        /// agent-browser --proxy URL (e.g. socks5://127.0.0.1:1080).
+        #[arg(long, help_heading = "Browser")]
+        proxy: Option<String>,
+
+        /// agent-browser --proxy-bypass HOSTS (comma-separated).
+        #[arg(long = "proxy-bypass", help_heading = "Browser")]
+        proxy_bypass: Option<String>,
+
+        /// agent-browser --args FLAGS — extra Chromium launch arguments.
+        #[arg(long = "browser-args", help_heading = "Browser")]
+        browser_args: Option<String>,
+
+        /// Override the agent-browser binary path. Defaults to
+        /// $AGENT_BROWSER_BIN, then "agent-browser" on $PATH.
+        #[arg(long, help_heading = "Browser")]
+        bin: Option<std::path::PathBuf>,
+
+        /// Print full ExecutionResult table (exit_code + stdout + stderr)
+        /// instead of streaming stdout/stderr to the terminal. Default:
+        /// stream stdout to stdout, stderr to stderr, exit with the
+        /// agent-browser exit code.
+        #[arg(long = "include-headers", short = 'i', help_heading = "Browser")]
+        include_headers: bool,
+    },
 }
 
 #[cfg(test)]

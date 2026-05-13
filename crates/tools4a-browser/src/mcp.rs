@@ -70,8 +70,7 @@ pub struct BrowserMcp;
 #[async_trait]
 impl McpTool for BrowserMcp {
     const NAME: &'static str = "browser_exec";
-    const DESCRIPTION: &'static str =
-        "Run one `agent-browser` CLI subcommand (https://github.com/vercel-labs/agent-browser) \
+    const DESCRIPTION: &'static str = "Run one `agent-browser` CLI subcommand (https://github.com/vercel-labs/agent-browser) \
          and return its captured stdout / stderr / exit code. The browser daemon persists \
          between calls, so a sequence of calls with the same `session` share cookies / pages. \
          The `agent-browser` binary must be installed separately on the host running tools4a.";
