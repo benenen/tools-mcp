@@ -11,28 +11,31 @@ Unified tool for SSH, MySQL, and Redis connections with MCP (Model Context Proto
 
 ## Status
 
-This is the Phase 9 release. Currently implemented:
+This is the Phase 14 Phase 1 release. Currently implemented:
 
-- All six service orchestrators (`MysqlOrchestrator`, `PgsqlOrchestrator`, `RedisOrchestrator`, `MongoOrchestrator`, `HttpOrchestrator`, `SshDirectOrchestrator`) impl the `tools4a_core::Service` trait, defined as `async fn execute(Self::Request, Option<TunnelConfig>) -> Result<ExecutionResult>`. Each lives in its own leaf crate (`tools4a-mysql`, `tools4a-pgsql`, …) alongside the corresponding `<Svc>Mcp` impl of `tools4a_core::McpTool`.
+- All eight service orchestrators (`MysqlOrchestrator`, `PgsqlOrchestrator`, `ClickhouseOrchestrator`, `RedisOrchestrator`, `MongoOrchestrator`, `HttpOrchestrator`, `SshDirectOrchestrator`, `BrowserOrchestrator`) impl the `tools4a_core::Service` trait, defined as `async fn execute(Self::Request, Option<TunnelConfig>) -> Result<ExecutionResult>`. Each lives in its own leaf crate (`tools4a-mysql`, `tools4a-pgsql`, …) alongside the corresponding `<Svc>Mcp` impl of `tools4a_core::McpTool`.
 - MySQL CLI mode (`tools4a mysql "..."`) and `mysql_exec` MCP tool.
-- **PostgreSQL CLI mode** (`tools4a pgsql "..."`) and `pgsql_exec` MCP tool.
+- PostgreSQL CLI mode (`tools4a pgsql "..."`) and `pgsql_exec` MCP tool.
+- **ClickHouse CLI mode** (`tools4a clickhouse "..."`) and `clickhouse_exec` MCP tool — SQL over the HTTP interface (default port 8123).
 - Redis CLI mode (`tools4a redis "..."`) and `redis_exec` MCP tool.
-- **MongoDB CLI mode** (`tools4a mongo '{"find":"coll","filter":{}}'`) and `mongo_exec` MCP tool — JSON document passed to `Database::run_command`.
+- MongoDB CLI mode (`tools4a mongo '{"find":"coll","filter":{}}'`) and `mongo_exec` MCP tool — JSON document passed to `Database::run_command`.
 - HTTP CLI mode (`tools4a http GET https://...`) and `http_exec` MCP tool.
-- **SSH-direct CLI mode** (`tools4a ssh "..."`) and `ssh_exec` MCP tool —
+- SSH-direct CLI mode (`tools4a ssh "..."`) and `ssh_exec` MCP tool —
   run a shell command on a target SSH server, optionally through SSH jump hosts.
+- **Browser CLI mode** (`tools4a browser <SUBCOMMAND> [ARGS]...`) and `browser_exec` MCP tool — thin wrapper around the externally-installed [`agent-browser`](https://github.com/vercel-labs/agent-browser) binary (operator installs it separately). Phase 1: direct-only; pass `--proxy socks5://...` after `ssh -D 1080 <bastion>` for SSH routing until Phase 2 adds SOCKS5 tunneling.
 - Configuration via YAML file (`--config=PATH`) or TOML profile (`--profile=NAME`)
-  for MySQL, PostgreSQL, Redis, and MongoDB. (HTTP and SSH-direct profile/YAML not yet supported.)
+  for MySQL, PostgreSQL, ClickHouse, Redis, and MongoDB. (HTTP, SSH-direct, and Browser profile/YAML not yet supported.)
 - Direct connection (`--tunnel=direct` or no `--tunnel`).
 - SSH tunnel (`--tunnel=ssh`) with single- or multi-hop jump (`--ssh-jump=h1[,h2,...]`),
   password or key auth. Host keys accepted with a fingerprint warning.
-  Works for all six services.
-- MCP server mode (`tools4a` with no subcommand) over stdio.
+  Works for seven of the eight services; browser tunnel is direct-only in Phase 1.
+- MCP server mode (`tools4a` with no subcommand) over stdio. SQL tools (mysql/pgsql/clickhouse) and HTTP tool return a second `Content::resource` (MCP App UI, MIME `text/html`) alongside the JSON text — clients without MCP Apps support ignore it.
 
 Not yet implemented:
+- SOCKS5 tunneling over SSH for the browser tool (Phase 2 — see `docs/superpowers/plans/2026-05-13-tools-mcp-phase14-browser-phase2.md`)
 - SSH key passphrases, per-hop auth overrides, strict known_hosts verification
 - SSH PTY allocation (interactive commands like `top` won't work)
-- HTTP / SSH-direct profile/YAML config
+- HTTP / SSH-direct / Browser profile/YAML config
 - HTTP/SSE MCP transport (the SERVER's transport)
 - Redis cluster routing, pub/sub, transactions, scripting (EVAL)
 - Per-Value typed mapping for RESP3 `Map` / `Set` / `Push`
@@ -57,8 +60,9 @@ the repo root (presentation layer only). The lib crates under `crates/`
 are: `tools4a-core` (everything shared — trait floor + concrete
 `DirectTunnel` / `SshTunnel` impls + `build_tunnel` + Config/Profile
 /Loader/Merger + SSH `session` chain helpers + `McpTool` trait), and
-the six leaf service crates `tools4a-mysql` / `tools4a-pgsql` /
-`tools4a-redis` / `tools4a-mongo` / `tools4a-http` / `tools4a-ssh`.
+the eight leaf service crates `tools4a-mysql` / `tools4a-pgsql` /
+`tools4a-clickhouse` / `tools4a-redis` / `tools4a-mongo` /
+`tools4a-http` / `tools4a-ssh` / `tools4a-browser`.
 Each leaf crate owns its full vertical slice: protocol primitives,
 the `<Svc>Orchestrator: impl Service`, and the `<Svc>Mcp: impl
 McpTool`. Every leaf depends only on `tools4a-core`. `cargo build`
@@ -207,6 +211,36 @@ tools4a ssh "false" --host=h --user=u --key-path=~/.ssh/k -i
 By default `tools4a`'s exit code mirrors the remote command's exit code,
 so shell-script usage works (e.g. `if tools4a ssh "test -f /etc/passwd" ...`).
 
+### Browser (agent-browser passthrough)
+
+Pre-requisite: install [`agent-browser`](https://github.com/vercel-labs/agent-browser)
+separately (`npm i -g agent-browser` or the upstream Rust build). tools4a
+shells out to it; it does not bundle a browser.
+
+```bash
+# Open a URL in a named session, then snapshot
+tools4a browser open https://example.com --session work
+tools4a browser snapshot --session work
+
+# Pass agent-browser flags directly — they sit AFTER the subcommand
+tools4a browser open https://example.com --wait
+# tools4a-side flags (--session, --proxy, --bin) go BEFORE the subcommand
+tools4a browser --session work open https://example.com
+
+# Show structured output (exit_code/stdout/stderr table)
+tools4a browser snapshot --session work -i
+
+# Phase 1 SSH-routing workaround (Phase 2 will fold this in via SocksTunnel):
+# In one terminal:    ssh -D 1080 bastion.example.com
+# Then:               tools4a browser open https://internal.local --proxy socks5://127.0.0.1:1080
+```
+
+`tools4a`'s exit code mirrors `agent-browser`'s, like the `ssh`
+subcommand. Phase 1 does NOT support `--tunnel=ssh` for browser — it
+returns an `Error::Config` with the inline `ssh -D` + `--proxy`
+workaround in the message; Phase 2 will add SOCKS5 routing through SSH
+directly (see `docs/superpowers/plans/2026-05-13-tools-mcp-phase14-browser-phase2.md`).
+
 ### MCP Server
 
 Run `tools4a` with no subcommand to start an MCP server over stdio:
@@ -215,12 +249,16 @@ Run `tools4a` with no subcommand to start an MCP server over stdio:
 tools4a
 ```
 
-It exposes six tools (`mysql_exec`, `pgsql_exec`, `redis_exec`, `mongo_exec`,
-`http_exec`, `ssh_exec`) — one per service. Each tool accepts the same
-parameters as the corresponding CLI subcommand plus the shared tunnel fields
-(`tunnel`, `ssh_jump`, `ssh_user`, `ssh_password`, `ssh_key_path`, `ssh_port`).
-AI clients (Claude Desktop, Cursor, etc.) can call these tools to query
-databases and run commands through SSH jump hosts.
+It exposes eight tools (`mysql_exec`, `pgsql_exec`, `clickhouse_exec`,
+`redis_exec`, `mongo_exec`, `http_exec`, `ssh_exec`, `browser_exec`) —
+one per service. Each tool accepts the same parameters as the
+corresponding CLI subcommand plus the shared tunnel fields (`tunnel`,
+`ssh_jump`, `ssh_user`, `ssh_password`, `ssh_key_path`, `ssh_port`).
+`browser_exec` additionally requires the [`agent-browser`](https://github.com/vercel-labs/agent-browser)
+binary to be installed on `$PATH` (or via `$AGENT_BROWSER_BIN`) — tools4a
+shells out to it and captures stdout/stderr/exit_code. AI clients
+(Claude Desktop, Cursor, etc.) can call these tools to query databases,
+run shell commands through SSH jump hosts, and automate a real browser.
 
 Example MCP configuration entry (e.g. for Claude Desktop):
 
@@ -238,7 +276,7 @@ Example MCP configuration entry (e.g. for Claude Desktop):
 
 This repo ships a Claude Code plugin (`.claude-plugin/plugin.json` +
 `.claude-plugin/marketplace.json` + `.mcp.json` + `skills/`). Once
-installed, Claude gets the six service MCP tools plus the
+installed, Claude gets the eight service MCP tools plus the
 project-specific skills — all wired up automatically.
 
 Pick **one** of the two paths below.
@@ -267,7 +305,7 @@ To upgrade after pulling new commits, rebuild the binary
 
 #### Path B: Install as a plain MCP server (lighter)
 
-Gives you the six MCP tools only (no skills). Useful if you don't want
+Gives you the eight MCP tools only (no skills). Useful if you don't want
 plugin-level integration.
 
 ```bash
@@ -289,14 +327,17 @@ subcommand, so no extra flags are needed.
 - **MCP tools** auto-registered via `.mcp.json`:
   - `mysql_exec` — run a MySQL query.
   - `pgsql_exec` — run a PostgreSQL query.
+  - `clickhouse_exec` — run a ClickHouse SQL query (HTTP interface).
   - `redis_exec` — run a Redis command.
   - `mongo_exec` — run a MongoDB command (JSON document to `runCommand`).
   - `http_exec` — send an HTTP request.
   - `ssh_exec` — run a shell command on a remote SSH server.
+  - `browser_exec` — run an `agent-browser` subcommand (browser automation; requires the external `agent-browser` binary).
 - **Skills** that guide the assistant (Path A only):
-  - `tools4a-using` — consolidated guide for all six tools: parameter shape per service, three-layer config priority (mysql + pgsql + redis + mongo), SSH tunnel syntax, output mapping, destructive-command list.
+  - `tools4a-using` — consolidated guide for all eight tools: parameter shape per service, three-layer config priority (mysql + pgsql + clickhouse + redis + mongo), SSH tunnel syntax, output mapping, destructive-command list.
   - `mysql-debugging` — diagnostic queries for common MySQL errors, locks, slow queries.
   - `ssh-bastion-checklist` — narrows down SSH-tunnel failures.
+  - `browser-using` — agent-browser daemon model, session reuse, Phase 1 SOCKS workaround for SSH-routed browsing.
 
 ### Configuration
 
