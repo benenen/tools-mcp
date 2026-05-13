@@ -1,0 +1,14 @@
+[package]
+name = "tools4a-browser"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-trait = "0.1"
+schemars = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.40", features = ["process", "io-util", "macros"] }
+tools4a-core = { path = "../tools4a-core" }
+
+[dev-dependencies]
+tokio = { version = "1.40", features = ["macros", "rt-multi-thread"] }

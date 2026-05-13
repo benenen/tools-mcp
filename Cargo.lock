@@ -4430,6 +4430,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "toml",
+ "tools4a-browser",
  "tools4a-clickhouse",
  "tools4a-core",
  "tools4a-http",
@@ -4438,6 +4439,17 @@ dependencies = [
  "tools4a-pgsql",
  "tools4a-redis",
  "tools4a-ssh",
+]
+
+[[package]]
+name = "tools4a-browser"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "schemars",
+ "serde",
+ "tokio",
+ "tools4a-core",
 ]
 
 [[package]]

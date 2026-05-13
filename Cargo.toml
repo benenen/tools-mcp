@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/tools4a-browser",
     "crates/tools4a-clickhouse",
     "crates/tools4a-core",
     "crates/tools4a-http",
@@ -34,6 +35,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yml = "0.0.12"
 tokio = { version = "1.40", features = ["full"] }
+tools4a-browser = { path = "crates/tools4a-browser" }
 tools4a-clickhouse = { path = "crates/tools4a-clickhouse" }
 tools4a-core = { path = "crates/tools4a-core" }
 tools4a-http = { path = "crates/tools4a-http" }
