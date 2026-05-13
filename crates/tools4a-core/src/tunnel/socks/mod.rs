@@ -5,8 +5,10 @@
 
 pub mod codec;
 pub mod connector;
+pub mod server;
 
 pub use codec::{
     ReplyCode, Request, parse_greeting, parse_request, write_greeting_reply, write_request_reply,
 };
 pub use connector::{Connector, SshConnector, Stream};
+pub use server::Socks5Server;
