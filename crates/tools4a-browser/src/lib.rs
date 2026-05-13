@@ -4,3 +4,7 @@
 //! session / page / cookie state. Each call here is one short-lived
 //! CLI invocation against that persistent daemon, captured as an
 //! `ExecutionResult` (stdout / stderr / exit_code).
+
+pub mod request;
+
+pub use request::BrowserRequest;
