@@ -7,10 +7,12 @@
 
 pub mod exec;
 pub mod execute;
+pub mod mcp;
 pub mod orchestrator;
 pub mod request;
 
 pub use exec::{BrowserExec, BrowserOutput, output_to_result, resolve_bin};
 pub use execute::execute;
+pub use mcp::{BrowserExecParams, BrowserMcp};
 pub use orchestrator::BrowserOrchestrator;
 pub use request::BrowserRequest;
