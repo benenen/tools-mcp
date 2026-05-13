@@ -35,6 +35,12 @@ pub struct HttpExecParams {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub insecure: bool,
 
+    /// Include HTML UI resource in the response. Disabled by default to
+    /// save tokens (~1700 tokens per call). When enabled, returns an
+    /// interactive HTTP response viewer alongside the JSON data.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include_ui: bool,
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tunnel: Option<TunnelKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

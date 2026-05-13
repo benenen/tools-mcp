@@ -10,12 +10,28 @@ use tools4a_core::{
     Error, ExecutionResult, McpTool, Result, Service, SshJumpInput, TunnelKind, build_tunnel_config,
 };
 
+fn default_format() -> String {
+    "toon".to_string()
+}
+
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct PgsqlExecParams {
     pub query: String,
 
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub allow_write: bool,
+
+    /// Include HTML UI resource in the response. Disabled by default to
+    /// save tokens (~1700 tokens per call). When enabled, returns an
+    /// interactive HTML table alongside the JSON data.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include_ui: bool,
+
+    /// Output format for the result. Options: "toon" (default), "json".
+    /// TOON format saves 30-60% tokens by using indentation-based format
+    /// instead of JSON. Set to "json" for traditional JSON output.
+    #[serde(default = "default_format")]
+    pub format: String,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,

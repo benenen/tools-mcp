@@ -4439,6 +4439,7 @@ dependencies = [
  "tools4a-pgsql",
  "tools4a-redis",
  "tools4a-ssh",
+ "toon",
 ]
 
 [[package]]
@@ -4478,6 +4479,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "toml",
+ "toon",
 ]
 
 [[package]]
@@ -4556,6 +4558,16 @@ dependencies = [
  "serde",
  "tokio",
  "tools4a-core",
+]
+
+[[package]]
+name = "toon"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fa605a2aa68fefdedc9560bd765ce3ad89d45ac1d3ebad43724621098c9299a"
+dependencies = [
+ "regex",
+ "serde_json",
 ]
 
 [[package]]

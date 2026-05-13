@@ -11,14 +11,20 @@
 pub mod config;
 pub mod mcp;
 pub mod readonly;
+pub mod result_compression;
 pub mod session;
 pub mod timeout;
+pub mod toon;
 pub mod tunnel;
 
 pub use mcp::{McpTool, SshJumpInput, TunnelKind, build_tunnel_config};
+pub use result_compression::{
+    ColumnInfo, ColumnStats, CompressedResult, CompressionInfo, CompressionStrategy,
+};
 pub use timeout::{
     DEFAULT_MAX_TIMEOUT_SECS, EffectiveTimeout, apply_with_timeout, resolve_effective_timeout,
 };
+pub use toon::{compressed_to_toon, to_toon};
 pub use tunnel::{DirectTunnel, SocksTunnel, SshTunnel, build_tunnel};
 
 use async_trait::async_trait;
@@ -142,6 +148,31 @@ impl ExecutionResult {
 
     pub fn push_warning(&mut self, warning: impl Into<String>) {
         self.warnings.push(warning.into());
+    }
+
+    /// Create a truncated version of this result for token-saving.
+    /// Returns a new `ExecutionResult` with only the first `max_rows` rows,
+    /// plus a warning indicating truncation. The full result should be
+    /// preserved in the UI resource.
+    pub fn truncated(&self, max_rows: usize) -> Self {
+        if self.rows.len() <= max_rows {
+            return self.clone();
+        }
+
+        let mut truncated = Self {
+            columns: self.columns.clone(),
+            rows: self.rows.iter().take(max_rows).cloned().collect(),
+            affected_rows: self.affected_rows,
+            warnings: self.warnings.clone(),
+        };
+
+        truncated.push_warning(format!(
+            "Result truncated: showing first {} of {} rows. Full data available in UI.",
+            max_rows,
+            self.rows.len()
+        ));
+
+        truncated
     }
 }
 

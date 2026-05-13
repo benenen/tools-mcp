@@ -44,53 +44,99 @@ fn into_call_result(
     }
 }
 
-/// SQL-flavored variant of `into_call_result` that also embeds an MCP
-/// App UI resource (`ui://tools4a/<svc>/result`, `text/html`) alongside
-/// the JSON text item. Clients without MCP Apps support ignore the
-/// resource and see only the text — same as today. Errors stay
+/// SQL-flavored variant of `into_call_result` that optionally embeds an
+/// MCP App UI resource (`ui://tools4a/<svc>/result`, `text/html`)
+/// alongside the JSON text item when `include_ui` is true. UI is
+/// disabled by default to save tokens. When UI is enabled, the JSON text
+/// is intelligently compressed based on result size. Supports multiple
+/// output formats:
+/// - "json" (default): Compact JSON with intelligent compression
+/// - "toon": Token-Optimized Object Notation (saves 30-60% tokens)
+/// The UI always contains the full dataset. Clients without MCP Apps
+/// support ignore the resource and see only the text. Errors stay
 /// single-item text; no UI for failed calls in v1.
 fn into_sql_call_result(
     svc: &'static str,
     res: tools4a_core::Result<ExecutionResult>,
+    include_ui: bool,
+    format: Option<String>,
 ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
     match res {
         Ok(result) => {
-            let json = serde_json::to_string_pretty(&result).map_err(|e| {
-                rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
-            })?;
-            let html = ui::render_sql(svc, &result);
-            let resource = Content::resource(ResourceContents::TextResourceContents {
-                uri: format!("ui://tools4a/{svc}/result"),
-                mime_type: Some("text/html".to_string()),
-                text: html,
-                meta: None,
-            });
-            Ok(CallToolResult::success(vec![Content::text(json), resource]))
+            let text = match format.as_deref() {
+                Some("toon") => {
+                    // TOON format: pipe-delimited, saves 30-60% tokens
+                    if include_ui {
+                        let compressed = result.compress_for_llm();
+                        tools4a_core::compressed_to_toon(&compressed)
+                    } else {
+                        tools4a_core::to_toon(&result)
+                    }
+                }
+                _ => {
+                    // Default: Compact JSON
+                    if include_ui {
+                        let compressed = result.compress_for_llm();
+                        serde_json::to_string(&compressed).map_err(|e| {
+                            rmcp::ErrorData::internal_error(format!("serialize compressed result failed: {e}"), None)
+                        })?
+                    } else {
+                        serde_json::to_string_pretty(&result).map_err(|e| {
+                            rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
+                        })?
+                    }
+                }
+            };
+
+            let mut content = vec![Content::text(text)];
+
+            if include_ui {
+                // UI always gets the full result
+                let html = ui::render_sql(svc, &result);
+                let resource = Content::resource(ResourceContents::TextResourceContents {
+                    uri: format!("ui://tools4a/{svc}/result"),
+                    mime_type: Some("text/html".to_string()),
+                    text: html,
+                    meta: None,
+                });
+                content.push(resource);
+            }
+
+            Ok(CallToolResult::success(content))
         }
         Err(e) => Ok(CallToolResult::error(vec![Content::text(e.to_string())])),
     }
 }
 
-/// HTTP variant of `into_call_result`: returns the same JSON text plus
-/// an MCP App UI resource (`ui://tools4a/http/response`, `text/html`)
-/// with a status badge, headers panel, and content-type-aware body
-/// viewer.
+/// HTTP variant of `into_call_result`: returns the same JSON text and
+/// optionally an MCP App UI resource (`ui://tools4a/http/response`,
+/// `text/html`) with a status badge, headers panel, and content-type-aware
+/// body viewer when `include_ui` is true. UI is disabled by default to
+/// save tokens.
 fn into_http_call_result(
     res: tools4a_core::Result<ExecutionResult>,
+    include_ui: bool,
 ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
     match res {
         Ok(result) => {
             let json = serde_json::to_string_pretty(&result).map_err(|e| {
                 rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
             })?;
-            let html = ui::render_http(&result);
-            let resource = Content::resource(ResourceContents::TextResourceContents {
-                uri: "ui://tools4a/http/response".to_string(),
-                mime_type: Some("text/html".to_string()),
-                text: html,
-                meta: None,
-            });
-            Ok(CallToolResult::success(vec![Content::text(json), resource]))
+
+            let mut content = vec![Content::text(json)];
+
+            if include_ui {
+                let html = ui::render_http(&result);
+                let resource = Content::resource(ResourceContents::TextResourceContents {
+                    uri: "ui://tools4a/http/response".to_string(),
+                    mime_type: Some("text/html".to_string()),
+                    text: html,
+                    meta: None,
+                });
+                content.push(resource);
+            }
+
+            Ok(CallToolResult::success(content))
         }
         Err(e) => Ok(CallToolResult::error(vec![Content::text(e.to_string())])),
     }
@@ -111,7 +157,9 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<MysqlExecParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_sql_call_result("mysql", MysqlMcp::invoke(params).await)
+        let include_ui = params.include_ui;
+        let format = Some(params.format.clone());
+        into_sql_call_result("mysql", MysqlMcp::invoke(params).await, include_ui, format)
     }
 
     #[tool(
@@ -121,7 +169,9 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<PgsqlExecParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_sql_call_result("pgsql", PgsqlMcp::invoke(params).await)
+        let include_ui = params.include_ui;
+        let format = Some(params.format.clone());
+        into_sql_call_result("pgsql", PgsqlMcp::invoke(params).await, include_ui, format)
     }
 
     #[tool(
@@ -131,7 +181,9 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<ClickhouseExecParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_sql_call_result("clickhouse", ClickhouseMcp::invoke(params).await)
+        let include_ui = params.include_ui;
+        let format = Some(params.format.clone());
+        into_sql_call_result("clickhouse", ClickhouseMcp::invoke(params).await, include_ui, format)
     }
 
     #[tool(
@@ -161,7 +213,8 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<HttpExecParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_http_call_result(HttpMcp::invoke(params).await)
+        let include_ui = params.include_ui;
+        into_http_call_result(HttpMcp::invoke(params).await, include_ui)
     }
 
     #[tool(

@@ -45,6 +45,7 @@ tools4a-pgsql = { path = "crates/tools4a-pgsql" }
 tools4a-redis = { path = "crates/tools4a-redis" }
 tools4a-ssh = { path = "crates/tools4a-ssh" }
 toml = "0.8"
+toon = "0.1.2"
 
 [dev-dependencies]
 tempfile = "3.12"
