@@ -11,7 +11,7 @@ Unified tool for SSH, MySQL, and Redis connections with MCP (Model Context Proto
 
 ## Status
 
-This is the Phase 14 Phase 1 release. Currently implemented:
+This is the Phase 14 Phase 2 release. Currently implemented:
 
 - All eight service orchestrators (`MysqlOrchestrator`, `PgsqlOrchestrator`, `ClickhouseOrchestrator`, `RedisOrchestrator`, `MongoOrchestrator`, `HttpOrchestrator`, `SshDirectOrchestrator`, `BrowserOrchestrator`) impl the `tools4a_core::Service` trait, defined as `async fn execute(Self::Request, Option<TunnelConfig>) -> Result<ExecutionResult>`. Each lives in its own leaf crate (`tools4a-mysql`, `tools4a-pgsql`, …) alongside the corresponding `<Svc>Mcp` impl of `tools4a_core::McpTool`.
 - MySQL CLI mode (`tools4a mysql "..."`) and `mysql_exec` MCP tool.
@@ -22,17 +22,16 @@ This is the Phase 14 Phase 1 release. Currently implemented:
 - HTTP CLI mode (`tools4a http GET https://...`) and `http_exec` MCP tool.
 - SSH-direct CLI mode (`tools4a ssh "..."`) and `ssh_exec` MCP tool —
   run a shell command on a target SSH server, optionally through SSH jump hosts.
-- **Browser CLI mode** (`tools4a browser <SUBCOMMAND> [ARGS]...`) and `browser_exec` MCP tool — thin wrapper around the externally-installed [`agent-browser`](https://github.com/vercel-labs/agent-browser) binary (operator installs it separately). Phase 1: direct-only; pass `--proxy socks5://...` after `ssh -D 1080 <bastion>` for SSH routing until Phase 2 adds SOCKS5 tunneling.
+- **Browser CLI mode** (`tools4a browser <SUBCOMMAND> [ARGS]...`) and `browser_exec` MCP tool — thin wrapper around the externally-installed [`agent-browser`](https://github.com/vercel-labs/agent-browser) binary (operator installs it separately). `--tunnel=ssh` works via a built-in per-call SOCKS5 server (`SocksTunnel`) over the SSH chain — tools4a injects `--proxy socks5://127.0.0.1:<rand>` automatically.
 - Configuration via YAML file (`--config=PATH`) or TOML profile (`--profile=NAME`)
   for MySQL, PostgreSQL, ClickHouse, Redis, and MongoDB. (HTTP, SSH-direct, and Browser profile/YAML not yet supported.)
 - Direct connection (`--tunnel=direct` or no `--tunnel`).
 - SSH tunnel (`--tunnel=ssh`) with single- or multi-hop jump (`--ssh-jump=h1[,h2,...]`),
   password or key auth. Host keys accepted with a fingerprint warning.
-  Works for seven of the eight services; browser tunnel is direct-only in Phase 1.
+  Works for all eight services: seven use single-port `direct-tcpip` via `SshTunnel`; browser uses a built-in per-call SOCKS5 server (`SocksTunnel`) over the same SSH chain (because a browser needs to reach many target hosts dynamically, not one fixed endpoint).
 - MCP server mode (`tools4a` with no subcommand) over stdio. SQL tools (mysql/pgsql/clickhouse) and HTTP tool return a second `Content::resource` (MCP App UI, MIME `text/html`) alongside the JSON text — clients without MCP Apps support ignore it.
 
 Not yet implemented:
-- SOCKS5 tunneling over SSH for the browser tool (Phase 2 — see `docs/superpowers/plans/2026-05-13-tools-mcp-phase14-browser-phase2.md`)
 - SSH key passphrases, per-hop auth overrides, strict known_hosts verification
 - SSH PTY allocation (interactive commands like `top` won't work)
 - HTTP / SSH-direct / Browser profile/YAML config
@@ -230,16 +229,18 @@ tools4a browser --session work open https://example.com
 # Show structured output (exit_code/stdout/stderr table)
 tools4a browser snapshot --session work -i
 
-# Phase 1 SSH-routing workaround (Phase 2 will fold this in via SocksTunnel):
-# In one terminal:    ssh -D 1080 bastion.example.com
-# Then:               tools4a browser open https://internal.local --proxy socks5://127.0.0.1:1080
+# Through an SSH bastion (tools4a binds a per-call SOCKS5 listener via SocksTunnel)
+tools4a --tunnel=ssh --ssh-jump=bastion.example.com --ssh-user=admin \
+  browser open https://internal.local --session work
 ```
 
 `tools4a`'s exit code mirrors `agent-browser`'s, like the `ssh`
-subcommand. Phase 1 does NOT support `--tunnel=ssh` for browser — it
-returns an `Error::Config` with the inline `ssh -D` + `--proxy`
-workaround in the message; Phase 2 will add SOCKS5 routing through SSH
-directly (see `docs/superpowers/plans/2026-05-13-tools-mcp-phase14-browser-phase2.md`).
+subcommand. `--tunnel=ssh` works via a built-in SOCKS5 server (no
+external `ssh -D` needed) — tools4a opens the SSH session chain,
+binds `127.0.0.1:<random>`, and injects `--proxy socks5://...` into
+the agent-browser invocation; the listener is torn down when the
+call returns. If you set BOTH `--tunnel=ssh` AND `--proxy ...`,
+that's an `Error::Config` conflict — pick one.
 
 ### MCP Server
 
