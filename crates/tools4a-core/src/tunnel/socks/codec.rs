@@ -71,7 +71,7 @@ pub fn parse_greeting(buf: &[u8]) -> Result<()> {
             "SOCKS5 greeting truncated (NMETHODS exceeds buffer)".into(),
         ));
     }
-    if buf[2..2 + n].iter().any(|&m| m == METHOD_NO_AUTH) {
+    if buf[2..2 + n].contains(&METHOD_NO_AUTH) {
         Ok(())
     } else {
         Err(Error::Service(
