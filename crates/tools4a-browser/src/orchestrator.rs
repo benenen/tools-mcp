@@ -1,11 +1,12 @@
 //! BrowserOrchestrator — `Service` impl for the browser tool.
 //!
-//! Validates the tunnel kind (Phase 1 only allows None / Direct;
-//! TunnelConfig::Ssh is rejected with an explicit Phase 2 deferral
-//! message), then dispatches into `execute`.
+//! Tunnel behavior:
+//!   - None / Direct: spawn agent-browser as-is.
+//!   - Ssh: build a SocksTunnel, inject `--proxy socks5://<endpoint>`
+//!     into the request, then run; tear the tunnel down on exit.
 
 use async_trait::async_trait;
-use tools4a_core::{Error, ExecutionResult, Result, Service, TunnelConfig};
+use tools4a_core::{Error, ExecutionResult, Result, Service, SocksTunnel, Tunnel, TunnelConfig};
 
 use crate::execute::execute;
 use crate::request::BrowserRequest;
@@ -16,19 +17,50 @@ pub struct BrowserOrchestrator;
 impl Service for BrowserOrchestrator {
     type Request = BrowserRequest;
 
-    async fn execute(req: Self::Request, tunnel: Option<TunnelConfig>) -> Result<ExecutionResult> {
+    async fn execute(
+        mut req: Self::Request,
+        tunnel: Option<TunnelConfig>,
+    ) -> Result<ExecutionResult> {
         match tunnel {
             None | Some(TunnelConfig::Direct) => execute(req).await,
-            Some(TunnelConfig::Ssh { .. }) => Err(Error::Config(
-                "tunnel=ssh is not supported for the browser tool in Phase 1. \
-                 The current SSH tunnel forwards a single TCP port (direct-tcpip), \
-                 which doesn't fit a full browser's network stack (cookies / SNI / \
-                 Host header / sub-resources). Phase 2 will add SOCKS5 routing \
-                 through SSH. As a workaround, run `ssh -D 1080 <bastion>` yourself \
-                 and pass `--proxy socks5://127.0.0.1:1080` (CLI) or `\"proxy\": \
-                 \"socks5://127.0.0.1:1080\"` (MCP)."
-                    .to_string(),
-            )),
+            Some(TunnelConfig::Ssh {
+                ssh_jumps,
+                ssh_user,
+                ssh_password,
+                ssh_key_path,
+                ssh_port,
+            }) => {
+                if req.proxy.is_some() {
+                    return Err(Error::Config(
+                        "tunnel=ssh and an explicit `proxy` field conflict: \
+                         tools4a injects `--proxy socks5://...` when ssh is set. \
+                         Pick one — drop `proxy` and let tools4a do it, or use \
+                         tunnel=direct + your own proxy."
+                            .into(),
+                    ));
+                }
+
+                let mut t = SocksTunnel::new(
+                    ssh_jumps,
+                    ssh_user,
+                    ssh_password,
+                    ssh_key_path.map(std::path::PathBuf::from),
+                    ssh_port,
+                )?;
+                let endpoint = t.establish().await?;
+                req.proxy = Some(format!("socks5://{}:{}", endpoint.host, endpoint.port));
+
+                let result = execute(req).await;
+
+                // Tear down regardless of outcome. Errors here don't
+                // override the execute() result; the call already
+                // happened, so the user-facing outcome is whatever
+                // execute returned.
+                if let Err(e) = t.close().await {
+                    eprintln!("BrowserOrchestrator: SocksTunnel close: {e}");
+                }
+                result
+            }
         }
     }
 }
@@ -50,9 +82,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejects_ssh_tunnel_with_phase2_message() {
+    async fn errors_when_user_proxy_conflicts_with_ssh_tunnel() {
+        let mut r = req();
+        r.proxy = Some("socks5://example.com:1080".into());
         let err = BrowserOrchestrator::execute(
-            req(),
+            r,
             Some(TunnelConfig::Ssh {
                 ssh_jumps: vec!["bastion.example.com".to_string()],
                 ssh_user: "admin".to_string(),
@@ -65,10 +99,10 @@ mod tests {
         .unwrap_err();
         match err {
             Error::Config(m) => {
-                assert!(m.contains("Phase 2"), "got: {m}");
-                assert!(m.contains("socks5://"), "got: {m}");
+                assert!(m.contains("conflict"), "got: {m}");
+                assert!(m.contains("socks5"), "got: {m}");
             }
-            other => panic!("expected Config, got {other:?}"),
+            other => panic!("got {other:?}"),
         }
     }
 

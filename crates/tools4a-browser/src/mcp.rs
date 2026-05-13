@@ -105,12 +105,17 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn invoke_with_ssh_tunnel_surfaces_phase2_message() {
+    async fn invoke_rejects_proxy_conflict_with_ssh_tunnel() {
+        // Phase 2: tunnel=ssh works — but if the user ALSO passes an
+        // explicit proxy, that's a config conflict (tools4a injects
+        // its own socks5:// proxy from the SOCKS tunnel endpoint).
+        // The orchestrator returns Error::Config BEFORE attempting any
+        // DNS / SSH connect, so this test is deterministic and offline.
         let params = BrowserExecParams {
             subcommand: "snapshot".into(),
             args: Vec::new(),
             session: None,
-            proxy: None,
+            proxy: Some("socks5://127.0.0.1:1080".into()),
             proxy_bypass: None,
             browser_args: None,
             bin: None,
@@ -123,6 +128,7 @@ mod tests {
         };
         let err = BrowserMcp::invoke(params).await.unwrap_err();
         let msg = format!("{err}");
-        assert!(msg.contains("Phase 2"), "got: {msg}");
+        assert!(msg.contains("conflict"), "got: {msg}");
+        assert!(msg.contains("socks5"), "got: {msg}");
     }
 }
