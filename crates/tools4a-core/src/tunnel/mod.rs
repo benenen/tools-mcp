@@ -4,6 +4,7 @@
 //! right tunnel before dispatching to its lib's `execute`.
 
 mod direct;
+pub mod socks;
 mod ssh;
 
 use crate::{Result, Tunnel, TunnelConfig};
