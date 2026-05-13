@@ -4,7 +4,9 @@
 //! pure (bytes in -> bytes out, no IO).
 
 pub mod codec;
+pub mod connector;
 
 pub use codec::{
     ReplyCode, Request, parse_greeting, parse_request, write_greeting_reply, write_request_reply,
 };
+pub use connector::{Connector, SshConnector, Stream};
