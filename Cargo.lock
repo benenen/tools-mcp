@@ -4417,7 +4417,7 @@ checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "tools4a"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "clap",
@@ -4444,7 +4444,7 @@ dependencies = [
 
 [[package]]
 name = "tools4a-browser"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "schemars",
@@ -4455,7 +4455,7 @@ dependencies = [
 
 [[package]]
 name = "tools4a-clickhouse"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "clickhouse",
@@ -4468,7 +4468,7 @@ dependencies = [
 
 [[package]]
 name = "tools4a-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "russh",
@@ -4484,7 +4484,7 @@ dependencies = [
 
 [[package]]
 name = "tools4a-http"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "reqwest",
@@ -4496,7 +4496,7 @@ dependencies = [
 
 [[package]]
 name = "tools4a-mongo"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "mongodb",
@@ -4510,7 +4510,7 @@ dependencies = [
 
 [[package]]
 name = "tools4a-mysql"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "mysql_async",
@@ -4523,7 +4523,7 @@ dependencies = [
 
 [[package]]
 name = "tools4a-pgsql"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4536,7 +4536,7 @@ dependencies = [
 
 [[package]]
 name = "tools4a-redis"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "redis",
@@ -4550,7 +4550,7 @@ dependencies = [
 
 [[package]]
 name = "tools4a-ssh"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "russh",
