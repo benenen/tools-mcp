@@ -7,12 +7,14 @@ mod direct;
 pub mod socks;
 mod socks_tunnel;
 mod ssh;
+mod streamlocal;
 
 use crate::{Result, Tunnel, TunnelConfig};
 
 pub use direct::DirectTunnel;
 pub use socks_tunnel::SocksTunnel;
 pub use ssh::SshTunnel;
+pub use streamlocal::StreamLocalTunnel;
 
 /// Build the appropriate tunnel for a target `(host, port)` from a
 /// `TunnelConfig`. `None` is treated as `Direct`.
