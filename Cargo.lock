@@ -4529,6 +4529,7 @@ dependencies = [
  "tools4a-mongo",
  "tools4a-mysql",
  "tools4a-pgsql",
+ "tools4a-rabbitmq",
  "tools4a-redis",
  "tools4a-ssh",
  "toon",
@@ -4638,6 +4639,20 @@ dependencies = [
  "tokio",
  "tokio-postgres",
  "tools4a-core",
+]
+
+[[package]]
+name = "tools4a-rabbitmq"
+version = "0.1.1"
+dependencies = [
+ "async-trait",
+ "reqwest",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tools4a-core",
+ "urlencoding",
 ]
 
 [[package]]

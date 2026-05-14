@@ -9,6 +9,7 @@ members = [
     "crates/tools4a-mongo",
     "crates/tools4a-mysql",
     "crates/tools4a-pgsql",
+    "crates/tools4a-rabbitmq",
     "crates/tools4a-redis",
     "crates/tools4a-ssh",
 ]
@@ -44,6 +45,7 @@ tools4a-http = { path = "crates/tools4a-http" }
 tools4a-mongo = { path = "crates/tools4a-mongo" }
 tools4a-mysql = { path = "crates/tools4a-mysql" }
 tools4a-pgsql = { path = "crates/tools4a-pgsql" }
+tools4a-rabbitmq = { path = "crates/tools4a-rabbitmq" }
 tools4a-redis = { path = "crates/tools4a-redis" }
 tools4a-ssh = { path = "crates/tools4a-ssh" }
 toml = "0.8"

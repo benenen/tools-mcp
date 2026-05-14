@@ -21,6 +21,11 @@ use tools4a_http::{HttpExecParams, HttpMcp};
 use tools4a_mongo::{MongoExecParams, MongoMcp};
 use tools4a_mysql::{MysqlExecParams, MysqlMcp};
 use tools4a_pgsql::{PgsqlExecParams, PgsqlMcp};
+use tools4a_rabbitmq::{
+    RabbitmqGetMessagesMcp, RabbitmqGetMessagesParams, RabbitmqListBindingsMcp,
+    RabbitmqListBindingsParams, RabbitmqListQueuesMcp, RabbitmqListQueuesParams,
+    RabbitmqOverviewMcp, RabbitmqOverviewParams, RabbitmqQueueInfoMcp, RabbitmqQueueInfoParams,
+};
 use tools4a_redis::{RedisExecParams, RedisMcp};
 use tools4a_ssh::{SshExecParams, SshMcp};
 
@@ -318,6 +323,54 @@ impl ToolsMcpServer {
         Parameters(params): Parameters<DockerRestartParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
         into_call_result(DockerRestartMcp::invoke(params).await)
+    }
+
+    #[tool(
+        description = "List RabbitMQ queues with counts and rates. Read-only. Optional vhost + glob filter."
+    )]
+    async fn rabbitmq_list_queues(
+        &self,
+        Parameters(params): Parameters<RabbitmqListQueuesParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(RabbitmqListQueuesMcp::invoke(params).await)
+    }
+
+    #[tool(description = "Inspect a single RabbitMQ queue (full JSON spec).")]
+    async fn rabbitmq_queue_info(
+        &self,
+        Parameters(params): Parameters<RabbitmqQueueInfoParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(RabbitmqQueueInfoMcp::invoke(params).await)
+    }
+
+    #[tool(
+        description = "Peek N messages from a RabbitMQ queue without consuming them (uses ackmode=ack_requeue_true)."
+    )]
+    async fn rabbitmq_get_messages(
+        &self,
+        Parameters(params): Parameters<RabbitmqGetMessagesParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(RabbitmqGetMessagesMcp::invoke(params).await)
+    }
+
+    #[tool(
+        description = "List RabbitMQ bindings (source exchange -> destination queue/exchange + routing key). Read-only."
+    )]
+    async fn rabbitmq_list_bindings(
+        &self,
+        Parameters(params): Parameters<RabbitmqListBindingsParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(RabbitmqListBindingsMcp::invoke(params).await)
+    }
+
+    #[tool(
+        description = "RabbitMQ cluster + node overview (versions, totals, message rates). Read-only."
+    )]
+    async fn rabbitmq_overview(
+        &self,
+        Parameters(params): Parameters<RabbitmqOverviewParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(RabbitmqOverviewMcp::invoke(params).await)
     }
 }
 

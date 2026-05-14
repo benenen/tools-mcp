@@ -1,4 +1,4 @@
-use crate::cli::{Cli, Commands, DockerCommand, TunnelKind, TunnelServeType};
+use crate::cli::{Cli, Commands, DockerCommand, RabbitmqCommand, TunnelKind, TunnelServeType};
 use crate::output::CliFormatter;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -15,6 +15,9 @@ use tools4a_http::{HttpAuth, HttpOrchestrator, HttpRequestSpec};
 use tools4a_mongo::{MongoOrchestrator, MongoRequest};
 use tools4a_mysql::{MysqlOrchestrator, MysqlRequest};
 use tools4a_pgsql::{PgsqlOrchestrator, PgsqlRequest};
+use tools4a_rabbitmq::{
+    RabbitmqAction, RabbitmqOrchestrator, RabbitmqRequest, orchestrator::default_port_for,
+};
 use tools4a_redis::{RedisOrchestrator, RedisRequest};
 use tools4a_ssh::{SshDirectOrchestrator, SshExecRequest};
 
@@ -203,6 +206,18 @@ impl CliHandler {
                 unix_socket,
                 action,
             }) => Self::execute_docker(&cli, docker_host, unix_socket, action).await,
+            Some(Commands::Rabbitmq {
+                host,
+                scheme,
+                port,
+                user,
+                password,
+                insecure,
+                action,
+            }) => {
+                Self::execute_rabbitmq(&cli, host, scheme, port, user, password, insecure, action)
+                    .await
+            }
             Some(Commands::TunnelServe {
                 kind,
                 listen,
@@ -772,6 +787,75 @@ impl CliHandler {
             timeout_secs: cli.timeout,
         };
         let result = DockerOrchestrator::execute(req, tunnel_config).await?;
+        Self::print_warnings(&result);
+        println!("{}", CliFormatter::format(&result));
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn execute_rabbitmq(
+        cli: &Cli,
+        host: Option<String>,
+        scheme: Option<String>,
+        port: Option<u16>,
+        user: Option<String>,
+        password: Option<String>,
+        insecure: bool,
+        action: RabbitmqCommand,
+    ) -> Result<()> {
+        let host = host.ok_or_else(|| Error::Config("rabbitmq --host is required".into()))?;
+        let scheme = scheme.unwrap_or_else(|| "http".to_string());
+        let port = port.unwrap_or_else(|| default_port_for(&scheme));
+        let user = user.unwrap_or_else(|| "guest".to_string());
+        let password = password.unwrap_or_else(|| "guest".to_string());
+
+        let action = match action {
+            RabbitmqCommand::ListQueues {
+                vhost,
+                name_pattern,
+                limit,
+            } => RabbitmqAction::ListQueues {
+                vhost,
+                name_pattern,
+                limit,
+            },
+            RabbitmqCommand::QueueInfo { vhost, name } => RabbitmqAction::QueueInfo { vhost, name },
+            RabbitmqCommand::GetMessages {
+                vhost,
+                queue,
+                count,
+                truncate_bytes,
+            } => RabbitmqAction::GetMessages {
+                vhost,
+                queue,
+                count,
+                truncate_bytes,
+            },
+            RabbitmqCommand::ListBindings {
+                vhost,
+                source,
+                destination,
+            } => RabbitmqAction::ListBindings {
+                vhost,
+                source,
+                destination,
+            },
+            RabbitmqCommand::Overview => RabbitmqAction::Overview,
+        };
+
+        let tunnel_config = Self::cli_to_tunnel_config(cli)?;
+        let req = RabbitmqRequest {
+            action,
+            scheme,
+            host,
+            port,
+            user,
+            password,
+            insecure,
+            timeout_secs: cli.timeout,
+            max_timeout_secs: None,
+        };
+        let result = RabbitmqOrchestrator::execute(req, tunnel_config).await?;
         Self::print_warnings(&result);
         println!("{}", CliFormatter::format(&result));
         Ok(())

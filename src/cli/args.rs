@@ -443,6 +443,37 @@ pub enum Commands {
         remote_socket: Option<String>,
     },
 
+    /// Talk to a RabbitMQ Management HTTP API (default port 15672).
+    /// Read-only diagnostic actions: list_queues, queue_info,
+    /// get_messages (non-destructive peek), list_bindings, overview.
+    #[command(
+        override_usage = "tools4a [GLOBAL OPTIONS] rabbitmq [OPTIONS] <SUBCOMMAND> [ARGS]..."
+    )]
+    #[command(after_help = USAGE_LEGEND)]
+    Rabbitmq {
+        /// Management API host (required).
+        #[arg(long, global = true, help_heading = "RabbitMQ")]
+        host: Option<String>,
+        /// "http" (default) or "https".
+        #[arg(long, global = true, help_heading = "RabbitMQ")]
+        scheme: Option<String>,
+        /// Default 15672 (HTTP) or 15671 (HTTPS).
+        #[arg(long, global = true, help_heading = "RabbitMQ")]
+        port: Option<u16>,
+        /// Basic-auth user (default "guest").
+        #[arg(long, global = true, help_heading = "RabbitMQ")]
+        user: Option<String>,
+        /// Basic-auth password (default "guest").
+        #[arg(long, global = true, help_heading = "RabbitMQ")]
+        password: Option<String>,
+        /// Skip TLS cert verification (HTTPS only).
+        #[arg(long, global = true, help_heading = "RabbitMQ")]
+        insecure: bool,
+
+        #[command(subcommand)]
+        action: RabbitmqCommand,
+    },
+
     /// Talk to a Docker daemon (local socket, local/remote TCP, or remote
     /// unix socket via SSH tunnel). Read actions are unrestricted; write
     /// actions (run, restart) require --allow-write.
@@ -525,6 +556,47 @@ pub enum DockerCommand {
         #[arg(long = "allow-write")]
         allow_write: bool,
     },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum RabbitmqCommand {
+    /// List queues with counts and rates. Optional vhost + glob filter.
+    ListQueues {
+        #[arg(long)]
+        vhost: Option<String>,
+        /// Glob pattern on queue name (`*` wildcard). e.g. `ai_teacher_*`.
+        #[arg(long = "name-pattern")]
+        name_pattern: Option<String>,
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+    /// Inspect a single queue (full JSON).
+    QueueInfo {
+        #[arg(long)]
+        vhost: String,
+        name: String,
+    },
+    /// Peek N messages without consuming.
+    GetMessages {
+        #[arg(long)]
+        vhost: String,
+        queue: String,
+        #[arg(long, default_value_t = 1)]
+        count: usize,
+        #[arg(long = "truncate-bytes")]
+        truncate_bytes: Option<usize>,
+    },
+    /// List bindings (source -> destination + routing key).
+    ListBindings {
+        #[arg(long)]
+        vhost: Option<String>,
+        #[arg(long)]
+        source: Option<String>,
+        #[arg(long)]
+        destination: Option<String>,
+    },
+    /// Cluster + node overview.
+    Overview,
 }
 
 #[cfg(test)]
