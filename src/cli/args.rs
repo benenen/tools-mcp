@@ -379,6 +379,89 @@ pub enum Commands {
         #[arg(long = "include-headers", short = 'i', help_heading = "Browser")]
         include_headers: bool,
     },
+
+    /// Talk to a Docker daemon (local socket, local/remote TCP, or remote
+    /// unix socket via SSH tunnel). Read actions are unrestricted; write
+    /// actions (run, restart) require --allow-write.
+    #[command(override_usage = "tools4a [GLOBAL OPTIONS] docker [OPTIONS] <SUBCOMMAND> [ARGS]...")]
+    #[command(after_help = USAGE_LEGEND)]
+    Docker {
+        /// Docker daemon endpoint. unix:///path or tcp://host:port.
+        /// Default: unix:///var/run/docker.sock.
+        #[arg(long = "docker-host", global = true, help_heading = "Docker")]
+        docker_host: Option<String>,
+
+        /// Remote unix socket path. Only valid with --tunnel=ssh; uses
+        /// StreamLocalTunnel to forward the remote socket through SSH.
+        #[arg(long = "unix-socket", global = true, help_heading = "Docker")]
+        unix_socket: Option<String>,
+
+        #[command(subcommand)]
+        action: DockerCommand,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum DockerCommand {
+    /// List containers.
+    Ps {
+        #[arg(long)]
+        all: bool,
+        #[arg(long)]
+        limit: Option<i32>,
+        /// Filters in `key=value` form (repeatable). Example: --filter name=app --filter status=running
+        #[arg(long = "filter", value_name = "KEY=VALUE")]
+        filters: Vec<String>,
+    },
+    /// Inspect a container (returns full JSON spec).
+    Inspect { container: String },
+    /// Fetch container logs (one-shot, no follow).
+    Logs {
+        container: String,
+        #[arg(long, default_value = "100")]
+        tail: String,
+        #[arg(long, default_value_t = true)]
+        stdout: bool,
+        #[arg(long, default_value_t = true)]
+        stderr: bool,
+        #[arg(long)]
+        timestamps: bool,
+        #[arg(long)]
+        since: Option<i32>,
+    },
+    /// One-shot resource stats (cpu/mem/net/io).
+    Stats { container: String },
+    /// List processes inside a container.
+    Top {
+        container: String,
+        #[arg(long = "ps-args")]
+        ps_args: Option<String>,
+    },
+    /// Run a command inside a container. Requires --allow-write.
+    Run {
+        container: String,
+        /// Command + arguments. e.g. tools4a docker run my-c -- sh -c "jstack 1"
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
+        cmd: Vec<String>,
+        #[arg(long)]
+        user: Option<String>,
+        #[arg(long = "working-dir")]
+        working_dir: Option<String>,
+        #[arg(long = "env", value_name = "KEY=VALUE")]
+        env: Vec<String>,
+        #[arg(long)]
+        privileged: bool,
+        #[arg(long = "allow-write")]
+        allow_write: bool,
+    },
+    /// Restart a container. Requires --allow-write.
+    Restart {
+        container: String,
+        #[arg(long = "timeout-secs")]
+        timeout_secs: Option<i32>,
+        #[arg(long = "allow-write")]
+        allow_write: bool,
+    },
 }
 
 #[cfg(test)]

@@ -12,6 +12,11 @@ use rmcp::{
 use tools4a_browser::{BrowserExecParams, BrowserMcp};
 use tools4a_clickhouse::{ClickhouseExecParams, ClickhouseMcp};
 use tools4a_core::{ExecutionResult, McpTool};
+use tools4a_docker::{
+    DockerExecMcp, DockerExecParams, DockerInspectMcp, DockerInspectParams, DockerLogsMcp,
+    DockerLogsParams, DockerPsMcp, DockerPsParams, DockerRestartMcp, DockerRestartParams,
+    DockerStatsMcp, DockerStatsParams, DockerTopMcp, DockerTopParams,
+};
 use tools4a_http::{HttpExecParams, HttpMcp};
 use tools4a_mongo::{MongoExecParams, MongoMcp};
 use tools4a_mysql::{MysqlExecParams, MysqlMcp};
@@ -247,6 +252,72 @@ impl ToolsMcpServer {
         Parameters(params): Parameters<BrowserExecParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
         into_call_result(BrowserMcp::invoke(params).await)
+    }
+
+    #[tool(
+        description = "List Docker containers. Read-only. Supports local unix socket, local/remote TCP, and remote unix socket via SSH tunnel (set unix_socket=/var/run/docker.sock + tunnel=ssh)."
+    )]
+    async fn docker_ps(
+        &self,
+        Parameters(params): Parameters<DockerPsParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(DockerPsMcp::invoke(params).await)
+    }
+
+    #[tool(description = "Inspect a Docker container. Returns the full JSON spec. Read-only.")]
+    async fn docker_inspect(
+        &self,
+        Parameters(params): Parameters<DockerInspectParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(DockerInspectMcp::invoke(params).await)
+    }
+
+    #[tool(
+        description = "Fetch container logs (one-shot, no follow). Read-only. Default tail is 100 lines."
+    )]
+    async fn docker_logs(
+        &self,
+        Parameters(params): Parameters<DockerLogsParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(DockerLogsMcp::invoke(params).await)
+    }
+
+    #[tool(
+        description = "One-shot container resource stats snapshot (CPU, memory, network, block IO). Read-only."
+    )]
+    async fn docker_stats(
+        &self,
+        Parameters(params): Parameters<DockerStatsParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(DockerStatsMcp::invoke(params).await)
+    }
+
+    #[tool(
+        description = "List processes running inside a container. Useful for finding the JVM PID. Read-only."
+    )]
+    async fn docker_top(
+        &self,
+        Parameters(params): Parameters<DockerTopParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(DockerTopMcp::invoke(params).await)
+    }
+
+    #[tool(
+        description = "Run a command inside a container (Docker exec API). Returns exit_code, stdout, stderr. Requires allow_write=true (write action)."
+    )]
+    async fn docker_exec(
+        &self,
+        Parameters(params): Parameters<DockerExecParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(DockerExecMcp::invoke(params).await)
+    }
+
+    #[tool(description = "Restart a Docker container. Requires allow_write=true (write action).")]
+    async fn docker_restart(
+        &self,
+        Parameters(params): Parameters<DockerRestartParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_call_result(DockerRestartMcp::invoke(params).await)
     }
 }
 
