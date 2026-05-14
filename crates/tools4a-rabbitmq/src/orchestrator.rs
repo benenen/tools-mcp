@@ -3,7 +3,7 @@
 //! typed action through `run::run`.
 
 use crate::actions::RabbitmqAction;
-use crate::connection::{ConnectParams, RabbitmqConnection, parse_resolve_addr};
+use crate::connection::{ConnectParams, RabbitmqConnection};
 use crate::run::run as dispatch_action;
 use async_trait::async_trait;
 use tools4a_core::{
@@ -48,24 +48,26 @@ impl Service for RabbitmqOrchestrator {
             )));
         }
 
-        // Build tunnel (if any) and figure out the resolve override.
+        // Build tunnel (if any), then point the base URL at the tunnel's
+        // local endpoint directly. We deliberately do NOT use reqwest's
+        // `resolve()` trick (which only kicks in for domain-name URL hosts;
+        // it gets bypassed when the URL host is an IP literal), so the
+        // URL always reflects where the actual TCP connect goes.
+        //
+        // Tradeoff: for HTTPS over an SSH tunnel against a domain-name
+        // host, the Host header + TLS SNI will see "127.0.0.1:<random>"
+        // instead of the original host. Users on that combination need
+        // `--insecure` until we add proper resolve-for-domain-hosts logic.
         let mut tunnel: Box<dyn Tunnel> = build_tunnel(req.host.clone(), req.port, tunnel_config)?;
         let endpoint = tunnel.establish().await?;
 
-        let resolve_override = if endpoint.host != req.host || endpoint.port != req.port {
-            Some(parse_resolve_addr(&endpoint.host, endpoint.port)?)
-        } else {
-            None
-        };
-
         let params = ConnectParams {
             scheme: req.scheme.clone(),
-            host: req.host.clone(),
-            port: req.port,
+            host: endpoint.host.clone(),
+            port: endpoint.port,
             user: req.user.clone(),
             password: req.password.clone(),
             insecure: req.insecure,
-            resolve_override,
         };
         let conn = RabbitmqConnection::build(&params)?;
 

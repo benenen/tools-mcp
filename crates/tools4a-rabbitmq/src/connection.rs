@@ -1,14 +1,10 @@
 //! Tiny RabbitMQ Management API client built on `reqwest`. Handles:
-//! - base URL (scheme://host:port)
+//! - base URL (scheme://host:port) — note: the orchestrator passes the
+//!   tunnel's local endpoint here when a tunnel is in use, so URLs
+//!   always reflect where the connect actually goes
 //! - basic-auth header (user/password)
 //! - vhost URL encoding (`/` → `%2F`)
-//! - optional `resolve()` DNS override for tunneled mode (mirrors the
-//!   trick the `http` leaf uses to keep SNI/cert verify pointed at the
-//!   original host while connecting to 127.0.0.1:<tunnel-port>)
 //! - optional `danger_accept_invalid_certs` for `--insecure`
-
-use std::net::SocketAddr;
-use std::str::FromStr;
 
 use reqwest::Client;
 use serde_json::Value;
@@ -24,7 +20,9 @@ pub struct RabbitmqConnection {
     password: String,
 }
 
-/// Connection parameters before we know what the tunnel resolved to.
+/// Connection parameters. `host` + `port` are where the HTTP client
+/// actually connects — when going through an SSH tunnel, the orchestrator
+/// passes the tunnel's local endpoint here, not the original RabbitMQ host.
 #[derive(Debug, Clone)]
 pub struct ConnectParams {
     pub scheme: String,
@@ -33,21 +31,13 @@ pub struct ConnectParams {
     pub user: String,
     pub password: String,
     pub insecure: bool,
-    /// If `Some`, install a `resolve(host, addr)` override so reqwest
-    /// connects to `addr` while keeping `host` for SNI / Host header /
-    /// cert verification.
-    pub resolve_override: Option<SocketAddr>,
 }
 
 impl RabbitmqConnection {
     pub fn build(p: &ConnectParams) -> Result<Self> {
-        let mut builder = Client::builder()
+        let client = Client::builder()
             .danger_accept_invalid_certs(p.insecure)
-            .user_agent(concat!("tools4a-rabbitmq/", env!("CARGO_PKG_VERSION")));
-        if let Some(addr) = p.resolve_override {
-            builder = builder.resolve(&p.host, addr);
-        }
-        let client = builder
+            .user_agent(concat!("tools4a-rabbitmq/", env!("CARGO_PKG_VERSION")))
             .build()
             .map_err(|e| Error::Service(format!("rabbitmq client init: {e}")))?;
         let base = format!("{}://{}:{}", p.scheme, p.host, p.port);
@@ -106,17 +96,6 @@ impl RabbitmqConnection {
 /// URL-encode a vhost name (default vhost `/` becomes `%2F`).
 pub fn encode_vhost(vhost: &str) -> String {
     urlencoding::encode(vhost).into_owned()
-}
-
-/// Helper to turn `"host:port"` into a `SocketAddr` for the resolve()
-/// override. Fails if the host isn't an IP literal — which is fine
-/// because the tunnel always returns `127.0.0.1:<port>`.
-pub fn parse_resolve_addr(host: &str, port: u16) -> Result<SocketAddr> {
-    SocketAddr::from_str(&format!("{host}:{port}")).map_err(|e| {
-        Error::Connection(format!(
-            "tunnel endpoint {host}:{port} is not a SocketAddr (need IP:port): {e}"
-        ))
-    })
 }
 
 #[cfg(test)]
