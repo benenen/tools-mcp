@@ -79,6 +79,18 @@ pub enum TunnelKind {
     Ssh,
 }
 
+/// Tunnel shape for `tools4a tunnel-serve`. Maps onto the three impls
+/// in `tools4a_core::tunnel`.
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TunnelServeType {
+    /// Single host:port forward, like `ssh -L LPORT:HOST:PORT JUMP`.
+    SshTcp,
+    /// Local TCP → remote unix socket, like `ssh -L LPORT:/sock JUMP`.
+    SshStreamlocal,
+    /// Dynamic SOCKS5 proxy, like `ssh -D LPORT JUMP`.
+    SshSocks,
+}
+
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
     /// Execute a MySQL query
@@ -378,6 +390,57 @@ pub enum Commands {
         /// agent-browser exit code.
         #[arg(long = "include-headers", short = 'i', help_heading = "Browser")]
         include_headers: bool,
+    },
+
+    /// Bind a long-running SSH tunnel to a local address. Like `ssh -L`
+    /// or `ssh -D` but using tools4a's russh-based chain. Runs until
+    /// SIGINT (Ctrl-C). Three shapes: ssh-tcp (single host:port forward),
+    /// ssh-streamlocal (remote unix socket -> local TCP), ssh-socks
+    /// (dynamic SOCKS5).
+    #[command(override_usage = "tools4a [GLOBAL OPTIONS] tunnel-serve [OPTIONS]")]
+    #[command(after_help = USAGE_LEGEND)]
+    TunnelServe {
+        /// Tunnel shape.
+        #[arg(long = "type", value_enum, help_heading = "TunnelServe")]
+        kind: TunnelServeType,
+
+        /// Local listen address. e.g. `127.0.0.1:2375`. Use 0.0.0.0 to
+        /// share with the LAN (security: be careful, no auth on the port).
+        #[arg(long, value_name = "HOST:PORT", help_heading = "TunnelServe")]
+        listen: std::net::SocketAddr,
+
+        /// SSH jump host(s). Single host or comma-separated chain.
+        #[arg(
+            long = "ssh-jump",
+            value_name = "HOST[,HOST...]",
+            help_heading = "TunnelServe"
+        )]
+        ssh_jump: String,
+
+        #[arg(long = "ssh-user", help_heading = "TunnelServe")]
+        ssh_user: String,
+
+        #[arg(long = "ssh-password", help_heading = "TunnelServe")]
+        ssh_password: Option<String>,
+
+        #[arg(long = "ssh-key-path", help_heading = "TunnelServe")]
+        ssh_key_path: Option<std::path::PathBuf>,
+
+        #[arg(long = "ssh-port", default_value_t = 22, help_heading = "TunnelServe")]
+        ssh_port: u16,
+
+        /// For --type=ssh-tcp: target host the bastion connects to.
+        #[arg(long = "target-host", help_heading = "TunnelServe")]
+        target_host: Option<String>,
+
+        /// For --type=ssh-tcp: target port the bastion connects to.
+        #[arg(long = "target-port", help_heading = "TunnelServe")]
+        target_port: Option<u16>,
+
+        /// For --type=ssh-streamlocal: remote unix socket path the bastion
+        /// connects to. e.g. /var/run/docker.sock.
+        #[arg(long = "remote-socket", help_heading = "TunnelServe")]
+        remote_socket: Option<String>,
     },
 
     /// Talk to a Docker daemon (local socket, local/remote TCP, or remote

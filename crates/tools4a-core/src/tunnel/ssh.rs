@@ -1,6 +1,7 @@
 use crate::session::{AcceptAnyHostKey, build_session_chain};
 use crate::{Error, Result, Tunnel, TunnelEndpoint};
 use async_trait::async_trait;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -15,6 +16,11 @@ pub struct SshTunnel {
     ssh_port: u16,
     target_host: String,
     target_port: u16,
+    /// Optional fixed listen address. `None` → bind 127.0.0.1:0 (random
+    /// port, the historic behavior every orchestrator depends on). `Some`
+    /// is set via `with_listen_addr` and used by `tunnel-serve` (Phase 16)
+    /// to bind a predictable port for long-running daemon mode.
+    listen_addr: Option<SocketAddr>,
     /// Set to Some after establish() succeeds.
     state: Option<SshTunnelState>,
 }
@@ -53,8 +59,16 @@ impl SshTunnel {
             ssh_port,
             target_host,
             target_port,
+            listen_addr: None,
             state: None,
         })
+    }
+
+    /// Override the default `127.0.0.1:0` listen binding with a specific
+    /// address. Used by the `tunnel-serve` CLI to bind a predictable port.
+    pub fn with_listen_addr(mut self, addr: SocketAddr) -> Self {
+        self.listen_addr = Some(addr);
+        self
     }
 }
 
@@ -80,10 +94,15 @@ impl Tunnel for SshTunnel {
 
         // Bind local listener and capture port BEFORE spawning so we can
         // return the endpoint synchronously.
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        let bind: SocketAddr = self
+            .listen_addr
+            .unwrap_or_else(|| "127.0.0.1:0".parse().expect("static addr"));
+        let listener = tokio::net::TcpListener::bind(bind)
             .await
             .map_err(Error::Io)?;
-        let local_port = listener.local_addr().map_err(Error::Io)?.port();
+        let local = listener.local_addr().map_err(Error::Io)?;
+        let local_port = local.port();
+        let local_host = local.ip().to_string();
 
         let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
         let target_host = self.target_host.clone();
@@ -124,7 +143,7 @@ impl Tunnel for SshTunnel {
         });
 
         Ok(TunnelEndpoint {
-            host: "127.0.0.1".to_string(),
+            host: local_host,
             port: local_port,
         })
     }

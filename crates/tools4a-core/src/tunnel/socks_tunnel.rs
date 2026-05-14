@@ -12,6 +12,7 @@
 //!   chain (via Arc drop).
 
 use async_trait::async_trait;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
@@ -33,6 +34,11 @@ pub struct SocksTunnel {
     ssh_password: Option<String>,
     ssh_key_path: Option<std::path::PathBuf>,
     ssh_port: u16,
+
+    /// Optional fixed listen address. `None` → 127.0.0.1:0 (random),
+    /// the historic behavior. `Some` set via `with_listen_addr` for
+    /// Phase 16 `tunnel-serve` daemon.
+    listen_addr: Option<SocketAddr>,
 
     /// Set on `establish()`, cleared on `close()`.
     state: Option<SocksTunnelState>,
@@ -68,8 +74,16 @@ impl SocksTunnel {
             ssh_password,
             ssh_key_path,
             ssh_port,
+            listen_addr: None,
             state: None,
         })
+    }
+
+    /// Override the default `127.0.0.1:0` listen binding with a specific
+    /// address. Used by the `tunnel-serve` CLI for daemon mode.
+    pub fn with_listen_addr(mut self, addr: SocketAddr) -> Self {
+        self.listen_addr = Some(addr);
+        self
     }
 }
 
@@ -93,10 +107,16 @@ impl Tunnel for SocksTunnel {
         .await?;
         let final_handle = Arc::clone(sessions.last().expect("chain has at least one session"));
 
-        // 2. Bind localhost listener on a random port; capture it
-        //    BEFORE spawning so we can return the endpoint synchronously.
-        let listener = TcpListener::bind("127.0.0.1:0").await.map_err(Error::Io)?;
-        let local_port = listener.local_addr().map_err(Error::Io)?.port();
+        // 2. Bind localhost listener; capture it BEFORE spawning so we
+        //    can return the endpoint synchronously. Defaults to
+        //    127.0.0.1:0 (random); tunnel-serve overrides via with_listen_addr.
+        let bind: SocketAddr = self
+            .listen_addr
+            .unwrap_or_else(|| "127.0.0.1:0".parse().expect("static addr"));
+        let listener = TcpListener::bind(bind).await.map_err(Error::Io)?;
+        let local = listener.local_addr().map_err(Error::Io)?;
+        let local_port = local.port();
+        let local_host = local.ip().to_string();
 
         // 3. Spawn accept loop: one SshConnector shared across all
         //    inbound SOCKS conns; each accepted conn gets a
@@ -143,7 +163,7 @@ impl Tunnel for SocksTunnel {
         });
 
         Ok(TunnelEndpoint {
-            host: "127.0.0.1".to_string(),
+            host: local_host,
             port: local_port,
         })
     }

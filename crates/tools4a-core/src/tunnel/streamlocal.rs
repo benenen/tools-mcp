@@ -16,6 +16,7 @@
 use crate::session::{AcceptAnyHostKey, build_session_chain};
 use crate::{Error, Result, Tunnel, TunnelEndpoint};
 use async_trait::async_trait;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -26,6 +27,9 @@ pub struct StreamLocalTunnel {
     ssh_key_path: Option<std::path::PathBuf>,
     ssh_port: u16,
     remote_socket_path: String,
+    /// Optional fixed listen address. `None` → 127.0.0.1:0 (random).
+    /// `Some` set via `with_listen_addr` for Phase 16 `tunnel-serve` daemon.
+    listen_addr: Option<SocketAddr>,
     /// Set after establish() succeeds.
     state: Option<StreamLocalTunnelState>,
 }
@@ -67,8 +71,16 @@ impl StreamLocalTunnel {
             ssh_key_path,
             ssh_port,
             remote_socket_path,
+            listen_addr: None,
             state: None,
         })
+    }
+
+    /// Override the default `127.0.0.1:0` listen binding with a specific
+    /// address. Used by the `tunnel-serve` CLI for daemon mode.
+    pub fn with_listen_addr(mut self, addr: SocketAddr) -> Self {
+        self.listen_addr = Some(addr);
+        self
     }
 }
 
@@ -91,10 +103,15 @@ impl Tunnel for StreamLocalTunnel {
         .await?;
         let final_handle = Arc::clone(sessions.last().expect("chain has at least one session"));
 
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        let bind: SocketAddr = self
+            .listen_addr
+            .unwrap_or_else(|| "127.0.0.1:0".parse().expect("static addr"));
+        let listener = tokio::net::TcpListener::bind(bind)
             .await
             .map_err(Error::Io)?;
-        let local_port = listener.local_addr().map_err(Error::Io)?.port();
+        let local = listener.local_addr().map_err(Error::Io)?;
+        let local_port = local.port();
+        let local_host = local.ip().to_string();
 
         let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
         let socket_path = self.remote_socket_path.clone();
@@ -134,7 +151,7 @@ impl Tunnel for StreamLocalTunnel {
         });
 
         Ok(TunnelEndpoint {
-            host: "127.0.0.1".to_string(),
+            host: local_host,
             port: local_port,
         })
     }
