@@ -159,6 +159,7 @@ mod tests {
             ssh_key_path: None,
             ssh_port: None,
             timeout_secs: None,
+            include_ui: false,
         };
         let (req, tunnel) = params_to_request_and_tunnel(p).unwrap();
         assert_eq!(req.method, "POST");

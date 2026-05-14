@@ -182,6 +182,8 @@ mod tests {
             ssh_key_path: None,
             ssh_port: None,
             timeout_secs: None,
+            include_ui: false,
+            format: "toon".to_string(),
         }
     }
 

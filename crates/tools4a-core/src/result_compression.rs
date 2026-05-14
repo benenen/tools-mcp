@@ -112,10 +112,7 @@ impl ExecutionResult {
 
     /// Truncated result (first N rows)
     fn to_compressed_truncated(&self, max_rows: usize) -> CompressedResult {
-        let sample_rows: Vec<Vec<String>> = self.rows.iter()
-            .take(max_rows)
-            .cloned()
-            .collect();
+        let sample_rows: Vec<Vec<String>> = self.rows.iter().take(max_rows).cloned().collect();
 
         CompressedResult {
             schema: self.infer_schema(),
@@ -182,20 +179,26 @@ impl ExecutionResult {
 
     /// Infer column types and get sample values
     fn infer_schema(&self) -> Vec<ColumnInfo> {
-        self.columns.iter().enumerate().map(|(idx, col_name)| {
-            let sample_values: Vec<String> = self.rows.iter()
-                .take(3)
-                .filter_map(|row| row.get(idx).cloned())
-                .collect();
+        self.columns
+            .iter()
+            .enumerate()
+            .map(|(idx, col_name)| {
+                let sample_values: Vec<String> = self
+                    .rows
+                    .iter()
+                    .take(3)
+                    .filter_map(|row| row.get(idx).cloned())
+                    .collect();
 
-            let inferred_type = self.infer_column_type(idx);
+                let inferred_type = self.infer_column_type(idx);
 
-            ColumnInfo {
-                name: col_name.clone(),
-                inferred_type,
-                sample_values,
-            }
-        }).collect()
+                ColumnInfo {
+                    name: col_name.clone(),
+                    inferred_type,
+                    sample_values,
+                }
+            })
+            .collect()
     }
 
     /// Infer column type from values
@@ -249,7 +252,8 @@ impl ExecutionResult {
         }
 
         let step = self.rows.len() / sample_size;
-        self.rows.iter()
+        self.rows
+            .iter()
             .step_by(step)
             .take(sample_size)
             .cloned()
@@ -258,49 +262,59 @@ impl ExecutionResult {
 
     /// Compute statistics for each column
     fn compute_statistics(&self) -> Vec<ColumnStats> {
-        self.columns.iter().enumerate().map(|(idx, col_name)| {
-            let mut values: Vec<&String> = vec![];
-            let mut null_count = 0;
+        self.columns
+            .iter()
+            .enumerate()
+            .map(|(idx, col_name)| {
+                let mut values: Vec<&String> = vec![];
+                let mut null_count = 0;
 
-            for row in &self.rows {
-                if let Some(val) = row.get(idx) {
-                    if val == "NULL" {
-                        null_count += 1;
-                    } else {
-                        values.push(val);
+                for row in &self.rows {
+                    if let Some(val) = row.get(idx) {
+                        if val == "NULL" {
+                            null_count += 1;
+                        } else {
+                            values.push(val);
+                        }
                     }
                 }
-            }
 
-            let mut unique_values: Vec<&String> = values.clone();
-            unique_values.sort();
-            unique_values.dedup();
+                let mut unique_values: Vec<&String> = values.clone();
+                unique_values.sort();
+                unique_values.dedup();
 
-            let (min, max) = if values.is_empty() {
-                (None, None)
-            } else {
-                // Try numeric comparison first
-                if let (Some(min_num), Some(max_num)) = (
-                    values.iter().filter_map(|v| v.parse::<f64>().ok()).min_by(|a, b| a.partial_cmp(b).unwrap()),
-                    values.iter().filter_map(|v| v.parse::<f64>().ok()).max_by(|a, b| a.partial_cmp(b).unwrap()),
-                ) {
-                    (Some(min_num.to_string()), Some(max_num.to_string()))
+                let (min, max) = if values.is_empty() {
+                    (None, None)
                 } else {
-                    // Fall back to string comparison
-                    (
-                        values.iter().min().map(|s| s.to_string()),
-                        values.iter().max().map(|s| s.to_string()),
-                    )
-                }
-            };
+                    // Try numeric comparison first
+                    if let (Some(min_num), Some(max_num)) = (
+                        values
+                            .iter()
+                            .filter_map(|v| v.parse::<f64>().ok())
+                            .min_by(|a, b| a.partial_cmp(b).unwrap()),
+                        values
+                            .iter()
+                            .filter_map(|v| v.parse::<f64>().ok())
+                            .max_by(|a, b| a.partial_cmp(b).unwrap()),
+                    ) {
+                        (Some(min_num.to_string()), Some(max_num.to_string()))
+                    } else {
+                        // Fall back to string comparison
+                        (
+                            values.iter().min().map(|s| s.to_string()),
+                            values.iter().max().map(|s| s.to_string()),
+                        )
+                    }
+                };
 
-            ColumnStats {
-                column: col_name.clone(),
-                min,
-                max,
-                distinct_count: unique_values.len(),
-                null_count,
-            }
-        }).collect()
+                ColumnStats {
+                    column: col_name.clone(),
+                    min,
+                    max,
+                    distinct_count: unique_values.len(),
+                    null_count,
+                }
+            })
+            .collect()
     }
 }

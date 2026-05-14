@@ -52,6 +52,7 @@ fn into_call_result(
 /// output formats:
 /// - "json" (default): Compact JSON with intelligent compression
 /// - "toon": Token-Optimized Object Notation (saves 30-60% tokens)
+///
 /// The UI always contains the full dataset. Clients without MCP Apps
 /// support ignore the resource and see only the text. Errors stay
 /// single-item text; no UI for failed calls in v1.
@@ -78,11 +79,17 @@ fn into_sql_call_result(
                     if include_ui {
                         let compressed = result.compress_for_llm();
                         serde_json::to_string(&compressed).map_err(|e| {
-                            rmcp::ErrorData::internal_error(format!("serialize compressed result failed: {e}"), None)
+                            rmcp::ErrorData::internal_error(
+                                format!("serialize compressed result failed: {e}"),
+                                None,
+                            )
                         })?
                     } else {
                         serde_json::to_string_pretty(&result).map_err(|e| {
-                            rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
+                            rmcp::ErrorData::internal_error(
+                                format!("serialize result failed: {e}"),
+                                None,
+                            )
                         })?
                     }
                 }
@@ -183,7 +190,12 @@ impl ToolsMcpServer {
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
         let include_ui = params.include_ui;
         let format = Some(params.format.clone());
-        into_sql_call_result("clickhouse", ClickhouseMcp::invoke(params).await, include_ui, format)
+        into_sql_call_result(
+            "clickhouse",
+            ClickhouseMcp::invoke(params).await,
+            include_ui,
+            format,
+        )
     }
 
     #[tool(
@@ -285,7 +297,13 @@ mod tests {
 
     #[test]
     fn sql_success_yields_text_plus_ui_resource() {
-        let call = into_sql_call_result("mysql", Ok(sample_sql_result())).unwrap();
+        let call = into_sql_call_result(
+            "mysql",
+            Ok(sample_sql_result()),
+            true,
+            Some("json".to_string()),
+        )
+        .unwrap();
         assert_eq!(call.content.len(), 2);
         assert_eq!(call.is_error, Some(false));
 
@@ -293,8 +311,15 @@ mod tests {
             .raw
             .as_text()
             .expect("first content item is text");
-        let parsed: ExecutionResult = serde_json::from_str(&text.text).expect("text is JSON");
-        assert_eq!(parsed.columns, vec!["id".to_string(), "name".to_string()]);
+        // include_ui=true uses compact JSON via compress_for_llm — parse
+        // as a generic Value (not ExecutionResult) since the compressed
+        // shape is different from the uncompressed one.
+        let parsed: serde_json::Value = serde_json::from_str(&text.text).expect("text is JSON");
+        // The compressed result has either rows or a schema+stats section;
+        // either way it carries the column names somewhere.
+        let serialized = parsed.to_string();
+        assert!(serialized.contains("id"));
+        assert!(serialized.contains("name"));
 
         match &call.content[1].raw {
             RawContent::Resource(embedded) => match &embedded.resource {
@@ -318,7 +343,9 @@ mod tests {
     #[test]
     fn sql_uri_varies_with_svc() {
         for svc in ["pgsql", "clickhouse"] {
-            let call = into_sql_call_result(svc, Ok(sample_sql_result())).unwrap();
+            let call =
+                into_sql_call_result(svc, Ok(sample_sql_result()), true, Some("json".to_string()))
+                    .unwrap();
             match &call.content[1].raw {
                 RawContent::Resource(embedded) => match &embedded.resource {
                     ResourceContents::TextResourceContents { uri, .. } => {
@@ -346,7 +373,7 @@ mod tests {
 
     #[test]
     fn http_success_yields_text_plus_ui_resource() {
-        let call = into_http_call_result(Ok(http_result_ok())).unwrap();
+        let call = into_http_call_result(Ok(http_result_ok()), true).unwrap();
         assert_eq!(call.content.len(), 2);
         assert_eq!(call.is_error, Some(false));
 
@@ -374,6 +401,8 @@ mod tests {
         let call = into_sql_call_result(
             "mysql",
             Err(tools4a_core::Error::Execution("syntax error".into())),
+            false,
+            None,
         )
         .unwrap();
         assert_eq!(call.content.len(), 1);
