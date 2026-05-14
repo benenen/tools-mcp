@@ -1,0 +1,16 @@
+[package]
+name = "tools4a-milvus"
+version = "0.1.1"
+edition = "2024"
+
+[dependencies]
+async-trait = "0.1"
+milvus-sdk-rust = { git = "https://github.com/BenLocal/milvus-sdk-rust.git", branch = "self" }
+schemars = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.40", features = ["macros", "rt"] }
+tools4a-core = { path = "../tools4a-core" }
+
+[dev-dependencies]
+tokio = { version = "1.40", features = ["full"] }

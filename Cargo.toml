@@ -6,6 +6,7 @@ members = [
     "crates/tools4a-core",
     "crates/tools4a-docker",
     "crates/tools4a-http",
+    "crates/tools4a-milvus",
     "crates/tools4a-mongo",
     "crates/tools4a-mysql",
     "crates/tools4a-pgsql",
@@ -42,6 +43,7 @@ tools4a-clickhouse = { path = "crates/tools4a-clickhouse" }
 tools4a-core = { path = "crates/tools4a-core" }
 tools4a-docker = { path = "crates/tools4a-docker" }
 tools4a-http = { path = "crates/tools4a-http" }
+tools4a-milvus = { path = "crates/tools4a-milvus" }
 tools4a-mongo = { path = "crates/tools4a-mongo" }
 tools4a-mysql = { path = "crates/tools4a-mysql" }
 tools4a-pgsql = { path = "crates/tools4a-pgsql" }

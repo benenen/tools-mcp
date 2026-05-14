@@ -443,6 +443,32 @@ pub enum Commands {
         remote_socket: Option<String>,
     },
 
+    /// Talk to a Milvus vector database (gRPC, default port 19530).
+    /// Six read tools (list/describe/stats/query), one vector search, and
+    /// three lifecycle ops (drop / load / release; allow_write gated).
+    #[command(override_usage = "tools4a [GLOBAL OPTIONS] milvus [OPTIONS] <SUBCOMMAND> [ARGS]...")]
+    #[command(after_help = USAGE_LEGEND)]
+    Milvus {
+        /// Milvus host (required).
+        #[arg(long, global = true, help_heading = "Milvus")]
+        host: Option<String>,
+        /// "http" (default) or "https".
+        #[arg(long, global = true, help_heading = "Milvus")]
+        scheme: Option<String>,
+        /// Default 19530.
+        #[arg(long, global = true, help_heading = "Milvus")]
+        port: Option<u16>,
+        /// Auth user (Milvus 2.x).
+        #[arg(long, global = true, help_heading = "Milvus")]
+        user: Option<String>,
+        /// Auth password.
+        #[arg(long, global = true, help_heading = "Milvus")]
+        password: Option<String>,
+
+        #[command(subcommand)]
+        action: MilvusCommand,
+    },
+
     /// Talk to a RabbitMQ Management HTTP API (default port 15672).
     /// Read-only diagnostic actions: list_queues, queue_info,
     /// get_messages (non-destructive peek), list_bindings, overview.
@@ -597,6 +623,74 @@ pub enum RabbitmqCommand {
     },
     /// Cluster + node overview.
     Overview,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum MilvusCommand {
+    /// List databases.
+    ListDatabases,
+    /// List collections.
+    ListCollections,
+    /// Inspect a collection (schema, fields, indexes).
+    DescribeCollection { name: String },
+    /// Get collection statistics (row_count etc.).
+    CollectionStats { name: String },
+    /// List partitions of a collection.
+    ListPartitions { collection: String },
+    /// Query by scalar filter expression.
+    Query {
+        collection: String,
+        expr: String,
+        /// Output fields (repeat or comma-separated).
+        #[arg(long = "output-fields", value_delimiter = ',')]
+        output_fields: Vec<String>,
+        #[arg(long = "partition", value_delimiter = ',')]
+        partition_names: Vec<String>,
+        #[arg(long)]
+        limit: Option<i64>,
+        /// Return raw vector floats instead of `<vec dim=N>` placeholders.
+        #[arg(long = "include-vectors")]
+        include_vectors: bool,
+    },
+    /// Vector ANN search. Vectors are JSON 2D array (e.g. '[[0.1,0.2,...]]').
+    Search {
+        collection: String,
+        /// JSON 2D float array, e.g. `'[[0.1, 0.2, ...]]'`.
+        #[arg(long)]
+        vectors: String,
+        #[arg(long, default_value = "L2")]
+        metric: String,
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
+        #[arg(long = "output-fields", value_delimiter = ',')]
+        output_fields: Vec<String>,
+        #[arg(long)]
+        filter: Option<String>,
+        /// Explicit anns_field (required when the collection has multiple vector fields).
+        #[arg(long = "anns-field")]
+        anns_field: Option<String>,
+        /// Return raw vector floats instead of `<vec dim=N>` placeholders.
+        #[arg(long = "include-vectors")]
+        include_vectors: bool,
+    },
+    /// Drop a collection (destructive).
+    DropCollection {
+        name: String,
+        #[arg(long = "allow-write")]
+        allow_write: bool,
+    },
+    /// Load collection into memory.
+    LoadCollection {
+        name: String,
+        #[arg(long = "allow-write")]
+        allow_write: bool,
+    },
+    /// Release collection from memory.
+    ReleaseCollection {
+        name: String,
+        #[arg(long = "allow-write")]
+        allow_write: bool,
+    },
 }
 
 #[cfg(test)]

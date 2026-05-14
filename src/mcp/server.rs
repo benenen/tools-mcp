@@ -18,6 +18,14 @@ use tools4a_docker::{
     DockerStatsMcp, DockerStatsParams, DockerTopMcp, DockerTopParams,
 };
 use tools4a_http::{HttpExecParams, HttpMcp};
+use tools4a_milvus::{
+    MilvusCollectionStatsMcp, MilvusCollectionStatsParams, MilvusDescribeCollectionMcp,
+    MilvusDescribeCollectionParams, MilvusDropCollectionMcp, MilvusDropCollectionParams,
+    MilvusListCollectionsMcp, MilvusListCollectionsParams, MilvusListDatabasesMcp,
+    MilvusListDatabasesParams, MilvusListPartitionsMcp, MilvusListPartitionsParams,
+    MilvusLoadCollectionMcp, MilvusLoadCollectionParams, MilvusQueryMcp, MilvusQueryParams,
+    MilvusReleaseCollectionMcp, MilvusReleaseCollectionParams, MilvusSearchMcp, MilvusSearchParams,
+};
 use tools4a_mongo::{MongoExecParams, MongoMcp};
 use tools4a_mysql::{MysqlExecParams, MysqlMcp};
 use tools4a_pgsql::{PgsqlExecParams, PgsqlMcp};
@@ -49,6 +57,24 @@ fn into_call_result(
                 rmcp::ErrorData::internal_error(format!("serialize result failed: {e}"), None)
             })?;
             Ok(CallToolResult::success(vec![Content::text(json)]))
+        }
+        Err(e) => Ok(CallToolResult::error(vec![Content::text(e.to_string())])),
+    }
+}
+
+/// TOON-flavored variant of `into_call_result`. Used by tools that
+/// return tabular/diagnostic data where TOON's pipe-delimited format
+/// saves 30-60% tokens vs pretty JSON. Currently: docker_* / rabbitmq_* /
+/// milvus_* tools. Other tools (ssh/mongo/redis/browser/http) stay JSON
+/// for now — their output shapes are more JSON-ish (auth shells, REST
+/// bodies, etc.).
+fn into_toon_call_result(
+    res: tools4a_core::Result<ExecutionResult>,
+) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+    match res {
+        Ok(result) => {
+            let text = tools4a_core::to_toon(&result);
+            Ok(CallToolResult::success(vec![Content::text(text)]))
         }
         Err(e) => Ok(CallToolResult::error(vec![Content::text(e.to_string())])),
     }
@@ -266,7 +292,7 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<DockerPsParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_call_result(DockerPsMcp::invoke(params).await)
+        into_toon_call_result(DockerPsMcp::invoke(params).await)
     }
 
     #[tool(description = "Inspect a Docker container. Returns the full JSON spec. Read-only.")]
@@ -274,7 +300,7 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<DockerInspectParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_call_result(DockerInspectMcp::invoke(params).await)
+        into_toon_call_result(DockerInspectMcp::invoke(params).await)
     }
 
     #[tool(
@@ -284,7 +310,7 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<DockerLogsParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_call_result(DockerLogsMcp::invoke(params).await)
+        into_toon_call_result(DockerLogsMcp::invoke(params).await)
     }
 
     #[tool(
@@ -294,7 +320,7 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<DockerStatsParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_call_result(DockerStatsMcp::invoke(params).await)
+        into_toon_call_result(DockerStatsMcp::invoke(params).await)
     }
 
     #[tool(
@@ -304,7 +330,7 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<DockerTopParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_call_result(DockerTopMcp::invoke(params).await)
+        into_toon_call_result(DockerTopMcp::invoke(params).await)
     }
 
     #[tool(
@@ -314,7 +340,7 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<DockerExecParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_call_result(DockerExecMcp::invoke(params).await)
+        into_toon_call_result(DockerExecMcp::invoke(params).await)
     }
 
     #[tool(description = "Restart a Docker container. Requires allow_write=true (write action).")]
@@ -322,7 +348,95 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<DockerRestartParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_call_result(DockerRestartMcp::invoke(params).await)
+        into_toon_call_result(DockerRestartMcp::invoke(params).await)
+    }
+
+    #[tool(description = "List Milvus databases. Read-only.")]
+    async fn milvus_list_databases(
+        &self,
+        Parameters(params): Parameters<MilvusListDatabasesParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_toon_call_result(MilvusListDatabasesMcp::invoke(params).await)
+    }
+
+    #[tool(description = "List collections in the current Milvus database. Read-only.")]
+    async fn milvus_list_collections(
+        &self,
+        Parameters(params): Parameters<MilvusListCollectionsParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_toon_call_result(MilvusListCollectionsMcp::invoke(params).await)
+    }
+
+    #[tool(
+        description = "Inspect a Milvus collection: schema + shards + partitions + aliases. Read-only."
+    )]
+    async fn milvus_describe_collection(
+        &self,
+        Parameters(params): Parameters<MilvusDescribeCollectionParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_toon_call_result(MilvusDescribeCollectionMcp::invoke(params).await)
+    }
+
+    #[tool(description = "Get Milvus collection statistics (row_count etc.). Read-only.")]
+    async fn milvus_collection_stats(
+        &self,
+        Parameters(params): Parameters<MilvusCollectionStatsParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_toon_call_result(MilvusCollectionStatsMcp::invoke(params).await)
+    }
+
+    #[tool(description = "List partitions of a Milvus collection. Read-only.")]
+    async fn milvus_list_partitions(
+        &self,
+        Parameters(params): Parameters<MilvusListPartitionsParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_toon_call_result(MilvusListPartitionsMcp::invoke(params).await)
+    }
+
+    #[tool(
+        description = "Query a Milvus collection by scalar filter expression. Returns rows of the requested output_fields. Read-only."
+    )]
+    async fn milvus_query(
+        &self,
+        Parameters(params): Parameters<MilvusQueryParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_toon_call_result(MilvusQueryMcp::invoke(params).await)
+    }
+
+    #[tool(
+        description = "Vector ANN search in a Milvus collection. Pass `vectors` as a 2D array of f32. Read-only."
+    )]
+    async fn milvus_search(
+        &self,
+        Parameters(params): Parameters<MilvusSearchParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_toon_call_result(MilvusSearchMcp::invoke(params).await)
+    }
+
+    #[tool(description = "Drop a Milvus collection (destructive). Requires allow_write=true.")]
+    async fn milvus_drop_collection(
+        &self,
+        Parameters(params): Parameters<MilvusDropCollectionParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_toon_call_result(MilvusDropCollectionMcp::invoke(params).await)
+    }
+
+    #[tool(
+        description = "Load a Milvus collection into memory (required before query/search). Requires allow_write=true."
+    )]
+    async fn milvus_load_collection(
+        &self,
+        Parameters(params): Parameters<MilvusLoadCollectionParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_toon_call_result(MilvusLoadCollectionMcp::invoke(params).await)
+    }
+
+    #[tool(description = "Release a Milvus collection from memory. Requires allow_write=true.")]
+    async fn milvus_release_collection(
+        &self,
+        Parameters(params): Parameters<MilvusReleaseCollectionParams>,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        into_toon_call_result(MilvusReleaseCollectionMcp::invoke(params).await)
     }
 
     #[tool(
@@ -332,7 +446,7 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<RabbitmqListQueuesParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_call_result(RabbitmqListQueuesMcp::invoke(params).await)
+        into_toon_call_result(RabbitmqListQueuesMcp::invoke(params).await)
     }
 
     #[tool(description = "Inspect a single RabbitMQ queue (full JSON spec).")]
@@ -340,7 +454,7 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<RabbitmqQueueInfoParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_call_result(RabbitmqQueueInfoMcp::invoke(params).await)
+        into_toon_call_result(RabbitmqQueueInfoMcp::invoke(params).await)
     }
 
     #[tool(
@@ -350,7 +464,7 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<RabbitmqGetMessagesParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_call_result(RabbitmqGetMessagesMcp::invoke(params).await)
+        into_toon_call_result(RabbitmqGetMessagesMcp::invoke(params).await)
     }
 
     #[tool(
@@ -360,7 +474,7 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<RabbitmqListBindingsParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_call_result(RabbitmqListBindingsMcp::invoke(params).await)
+        into_toon_call_result(RabbitmqListBindingsMcp::invoke(params).await)
     }
 
     #[tool(
@@ -370,7 +484,7 @@ impl ToolsMcpServer {
         &self,
         Parameters(params): Parameters<RabbitmqOverviewParams>,
     ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
-        into_call_result(RabbitmqOverviewMcp::invoke(params).await)
+        into_toon_call_result(RabbitmqOverviewMcp::invoke(params).await)
     }
 }
 
