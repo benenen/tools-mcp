@@ -4,6 +4,7 @@ members = [
     "crates/tools4a-browser",
     "crates/tools4a-clickhouse",
     "crates/tools4a-core",
+    "crates/tools4a-docker",
     "crates/tools4a-http",
     "crates/tools4a-mongo",
     "crates/tools4a-mysql",
@@ -38,6 +39,7 @@ tokio = { version = "1.40", features = ["full"] }
 tools4a-browser = { path = "crates/tools4a-browser" }
 tools4a-clickhouse = { path = "crates/tools4a-clickhouse" }
 tools4a-core = { path = "crates/tools4a-core" }
+tools4a-docker = { path = "crates/tools4a-docker" }
 tools4a-http = { path = "crates/tools4a-http" }
 tools4a-mongo = { path = "crates/tools4a-mongo" }
 tools4a-mysql = { path = "crates/tools4a-mysql" }
